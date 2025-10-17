@@ -1,6 +1,23 @@
 {
-  "name": "@drift/runtime",
+  "name": "drift-spa",
   "version": "0.1.0",
+  "description": "Modern SPA framework with reactivity, JSX, routing & DevTools",
+  "keywords": ["spa-framework", "reactivity", "typescript", "jsx", "routing", "performance"],
+  "author": "Drift Framework",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nomad-pixel/driftjs.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/nomad-pixel/driftjs#readme",
+  "bugs": {
+    "url": "https://github.com/nomad-pixel/driftjs/issues"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -21,7 +38,9 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/jsx-runtime.ts --dts --format esm --sourcemap --out-dir dist",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepublishOnly": "pnpm build",
+    "prepack": "pnpm build"
   },
   "devDependencies": {
     "tsup": "^8.0.1",

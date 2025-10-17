@@ -1,24 +1,24 @@
-# 🚀 Drift Framework
+# 🚀 Drift SPA Framework
 
-Современный SPA фреймворк с реактивностью, роутингом и оптимизациями производительности.
+Modern SPA framework with reactivity, routing, and performance optimizations.
 
-## ✨ Особенности
+## ✨ Features
 
-- **Реактивность** - Сигналы, computed значения и эффекты
-- **JSX** - Полная поддержка JSX синтаксиса
-- **Роутинг** - Hash и History режимы с guards
-- **Производительность** - Мемоизация, виртуализация, ленивая загрузка
-- **DevTools** - Визуальная отладка реактивности
-- **TypeScript** - Полная типизация
+- **Reactivity** - Signals, computed values, and effects
+- **JSX** - Full JSX syntax support
+- **Routing** - Hash and History modes with guards
+- **Performance** - Memoization, virtualization, lazy loading
+- **DevTools** - Visual reactivity debugging
+- **TypeScript** - Complete type safety
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
 ```bash
-npm install @drift/runtime
+npm install drift-spa
 ```
 
 ```tsx
-import { createSignal, createApp, type FC } from '@drift/runtime';
+import { createSignal, createApp, type FC } from 'drift-spa';
 
 const Counter: FC = () => {
   const [count, setCount] = createSignal(0);
@@ -36,24 +36,24 @@ createApp(Counter).mount('#app');
 
 ## 📚 API
 
-### Реактивность
+### Reactivity
 
 #### `createSignal<T>(initial: T, name?: string)`
-Создает реактивный сигнал.
+Creates a reactive signal.
 
 ```tsx
 const [count, setCount] = createSignal(0, 'counter');
 ```
 
 #### `createComputed<T>(fn: () => T)`
-Создает вычисляемое значение.
+Creates a computed value.
 
 ```tsx
 const doubleCount = createComputed(() => count() * 2);
 ```
 
 #### `effect(fn: () => void)`
-Создает эффект, который выполняется при изменении зависимостей.
+Creates an effect that runs when dependencies change.
 
 ```tsx
 effect(() => {
@@ -62,7 +62,7 @@ effect(() => {
 ```
 
 #### `batch(fn: () => void)`
-Батчинг множественных обновлений.
+Batches multiple updates.
 
 ```tsx
 batch(() => {
@@ -71,10 +71,10 @@ batch(() => {
 });
 ```
 
-### Роутинг
+### Routing
 
 #### `createRouter(config)`
-Создает роутер с поддержкой History и Hash режимов.
+Creates a router with History and Hash mode support.
 
 ```tsx
 const { RouterView, push, context } = createRouter({
@@ -92,7 +92,7 @@ const { RouterView, push, context } = createRouter({
 ```
 
 #### `createHashRouter(routes)`
-Упрощенный hash роутер.
+Simplified hash router.
 
 ```tsx
 const { RouterView, push } = createHashRouter({
@@ -101,10 +101,10 @@ const { RouterView, push } = createHashRouter({
 });
 ```
 
-### Производительность
+### Performance
 
 #### `memo(component, areEqual?)`
-Мемоизация компонентов.
+Component memoization.
 
 ```tsx
 const MemoComponent = memo(({ data }) => {
@@ -113,7 +113,7 @@ const MemoComponent = memo(({ data }) => {
 ```
 
 #### `VirtualList`
-Виртуализация списков.
+List virtualization.
 
 ```tsx
 <VirtualList
@@ -125,7 +125,7 @@ const MemoComponent = memo(({ data }) => {
 ```
 
 #### `lazy(loader)`
-Ленивая загрузка компонентов.
+Lazy component loading.
 
 ```tsx
 const LazyComponent = lazy(() => import('./HeavyComponent'));
@@ -134,24 +134,24 @@ const LazyComponent = lazy(() => import('./HeavyComponent'));
 ### DevTools
 
 #### `devtools.enable()`
-Включает панель отладки.
+Enables the debugging panel.
 
 ```tsx
-import { devtools } from '@drift/runtime';
+import { devtools } from 'drift-spa';
 
 if (import.meta.env.DEV) {
   devtools.enable();
 }
 ```
 
-Горячие клавиши: `Ctrl+Shift+D`
+Hotkeys: `Ctrl+Shift+D`
 
-## 🎯 Примеры
+## 🎯 Examples
 
-### Простой счетчик
+### Simple Counter
 
 ```tsx
-import { createSignal, createComputed, createApp, type FC } from '@drift/runtime';
+import { createSignal, createComputed, createApp, type FC } from 'drift-spa';
 
 const Counter: FC = () => {
   const [count, setCount] = createSignal(0);
@@ -170,10 +170,10 @@ const Counter: FC = () => {
 createApp(Counter).mount('#app');
 ```
 
-### Роутинг с параметрами
+### Routing with Parameters
 
 ```tsx
-import { createRouter, createSignal, type FC } from '@drift/runtime';
+import { createRouter, createSignal, type FC } from 'drift-spa';
 
 const UserPage: FC<{ params: { id: string } }> = ({ params }) => {
   const [user, setUser] = createSignal(null);
@@ -198,10 +198,10 @@ const { RouterView } = createRouter({
 });
 ```
 
-### Мемоизированный список
+### Memoized List
 
 ```tsx
-import { memo, VirtualList } from '@drift/runtime';
+import { memo, VirtualList } from 'drift-spa';
 
 const UserCard = memo(({ user }) => (
   <div style={{ padding: '8px', border: '1px solid #ccc' }}>
@@ -220,59 +220,59 @@ const UserList = ({ users }) => (
 );
 ```
 
-## 🔧 Разработка
+## 🔧 Development
 
 ```bash
-git clone https://github.com/your-org/drift
-cd drift
+git clone https://github.com/nomad-pixel/driftjs
+cd driftjs
 pnpm install
 pnpm dev
 ```
 
-### Структура проекта
+### Project Structure
 
 ```
-drift/
+driftjs/
 ├── packages/
-│   └── runtime/          # Основной пакет
+│   └── runtime/          # Main package
 │       ├── src/
-│       │   ├── reactivity.ts    # Реактивность
-│       │   ├── jsx-runtime.ts   # JSX поддержка
-│       │   ├── router.ts        # Роутинг
-│       │   ├── performance.ts   # Оптимизации
+│       │   ├── reactivity.ts    # Reactivity
+│       │   ├── jsx-runtime.ts   # JSX support
+│       │   ├── router.ts        # Routing
+│       │   ├── performance.ts   # Optimizations
 │       │   ├── devtools.ts      # DevTools
-│       │   ├── types.ts         # Типы
-│       │   └── index.ts         # Экспорты
-│       └── dist/                # Сборка
+│       │   ├── types.ts         # Types
+│       │   └── index.ts         # Exports
+│       └── dist/                # Build output
 └── examples/
-    └── counter-vite/     # Пример приложения
+    └── counter-vite/     # Example app
 ```
 
-## 📦 Сборка
+## 📦 Build
 
 ```bash
 pnpm build
 ```
 
-## 🧪 Тестирование
+## 🧪 Testing
 
 ```bash
 pnpm test
 ```
 
-## 📄 Лицензия
+## 📄 License
 
 MIT
 
-## 🤝 Вклад
+## 🤝 Contributing
 
-1. Fork репозиторий
-2. Создайте feature branch
-3. Commit изменения
-4. Push в branch
-5. Создайте Pull Request
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## 📞 Поддержка
+## 📞 Support
 
 - GitHub Issues
 - Discord: #drift-framework
@@ -280,4 +280,4 @@ MIT
 
 ---
 
-**Drift Framework** - Современный SPA фреймворк для создания быстрых и отзывчивых веб-приложений.
+**Drift SPA Framework** - Modern SPA framework for building fast and responsive web applications.

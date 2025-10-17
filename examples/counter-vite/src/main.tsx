@@ -4,7 +4,7 @@ import {
   createApp, 
   createHashRouter, 
   type FC 
-} from '@drift/runtime';
+} from 'drift-spa';
 
 const SimpleCounter: FC = () => {
   const [count, setCount] = createSignal(0);
@@ -12,7 +12,7 @@ const SimpleCounter: FC = () => {
   
   return (
     <div style={{ padding: '1rem' }}>
-      <h1>Простой тест Drift</h1>
+      <h1>Drift Simple Test</h1>
       <p>Count: {() => count()}</p>
       <p>Double: {() => doubleCount()}</p>
       <button onClick={() => setCount(c => c + 1)}>+</button>
@@ -23,8 +23,8 @@ const SimpleCounter: FC = () => {
 
 const TestPage: FC = () => (
   <div style={{ padding: '1rem' }}>
-    <h2>Тестовая страница</h2>
-    <p>Это простая тестовая страница</p>
+    <h2>Test Page</h2>
+    <p>This is a simple test page</p>
   </div>
 );
 

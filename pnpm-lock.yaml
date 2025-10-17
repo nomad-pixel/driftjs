@@ -14,7 +14,7 @@ importers:
 
   examples/counter-vite:
     dependencies:
-      '@drift/runtime':
+      drift-spa:
         specifier: workspace:*
         version: link:../../packages/runtime
     devDependencies:
