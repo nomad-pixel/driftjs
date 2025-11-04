@@ -1,4 +1,4 @@
-import { devtools } from './devtools';
+import { devtools } from "./devtools";
 
 type EffectFn = () => void;
 type ComputedFn<T> = () => T;
@@ -12,24 +12,24 @@ let EFFECT_COUNTER = 0;
 export function effect(fn: EffectFn): () => void {
   const effectId = ++EFFECT_COUNTER;
   const effectName = `effect-${effectId}`;
-  
+
   const runner = () => {
     cleanup(runner);
     CURRENT_EFFECT = runner;
-    try { 
-      fn(); 
+    try {
+      fn();
       devtools.updateEffect(runner);
-    } finally { 
-      CURRENT_EFFECT = null; 
+    } finally {
+      CURRENT_EFFECT = null;
     }
   };
   (runner as any).deps = new Set<Set<EffectFn>>();
   (runner as any).disposed = false;
-  Object.defineProperty(runner, 'name', { value: effectName, writable: true });
-  
+  Object.defineProperty(runner, "name", { value: effectName, writable: true });
+
   devtools.trackEffect(runner, effectName, []);
   runner();
-  
+
   return () => {
     (runner as any).disposed = true;
     devtools.updateEffect(runner, true);
@@ -37,23 +37,25 @@ export function effect(fn: EffectFn): () => void {
   };
 }
 
-function cleanup(runner: EffectFn & { deps?: Set<Set<EffectFn>>; disposed?: boolean }) {
+function cleanup(
+  runner: EffectFn & { deps?: Set<Set<EffectFn>>; disposed?: boolean }
+) {
   if (runner.disposed) return;
-  runner.deps?.forEach(d => d.delete(runner));
+  runner.deps?.forEach((d) => d.delete(runner));
   runner.deps?.clear();
 }
 
 function scheduleEffect(fn: EffectFn) {
   if (BATCH_QUEUE.includes(fn)) return;
   BATCH_QUEUE.push(fn);
-  
+
   if (!BATCH_SCHEDULED) {
     BATCH_SCHEDULED = true;
     Promise.resolve().then(() => {
       const effects = BATCH_QUEUE.slice();
       BATCH_QUEUE.length = 0;
       BATCH_SCHEDULED = false;
-      effects.forEach(effect => effect());
+      effects.forEach((effect) => effect());
     });
   }
 }
@@ -68,7 +70,7 @@ export function createSignal<T>(initial: T, name?: string) {
     if (CURRENT_EFFECT) {
       subs.add(CURRENT_EFFECT);
       (CURRENT_EFFECT as any).deps?.add(subs);
-      
+
       const effectName = (CURRENT_EFFECT as any).name;
       if (effectName) {
         devtools.trackEffect(CURRENT_EFFECT, effectName, [signalName]);
@@ -78,13 +80,13 @@ export function createSignal<T>(initial: T, name?: string) {
   };
 
   const set = (next: T | ((prev: T) => T)) => {
-    const newValue = typeof next === 'function' ? (next as any)(value) : next;
+    const newValue = typeof next === "function" ? (next as any)(value) : next;
     if (Object.is(value, newValue)) return;
     value = newValue;
-    
+
     devtools.trackSignal(get, signalName, value, subs.size);
-    
-    subs.forEach(fn => scheduleEffect(fn));
+
+    subs.forEach((fn) => scheduleEffect(fn));
   };
 
   devtools.trackSignal(get, signalName, value, 0);
@@ -92,22 +94,51 @@ export function createSignal<T>(initial: T, name?: string) {
   return [get, set] as const;
 }
 
-export function createComputed<T>(fn: ComputedFn<T>) {
+export function createComputed<T>(fn: ComputedFn<T>, name?: string) {
   let value: T;
-  let isInitialized = false;
-  
+  const subs = new Set<EffectFn>();
+  const computedId = ++SIGNAL_COUNTER;
+  const computedName = name || `computed-${computedId}`;
+
+  // Создаем эффект сразу, который будет пересчитывать значение
+  const runner = () => {
+    cleanup(runner);
+    CURRENT_EFFECT = runner;
+    try {
+      value = fn();
+      devtools.updateEffect(runner);
+      // Уведомляем подписчиков о новом значении
+      subs.forEach((sub) => scheduleEffect(sub));
+    } finally {
+      CURRENT_EFFECT = null;
+    }
+  };
+  (runner as any).deps = new Set<Set<EffectFn>>();
+  (runner as any).disposed = false;
+  Object.defineProperty(runner, "name", {
+    value: computedName,
+    writable: true,
+  });
+
+  devtools.trackEffect(runner, computedName, []);
+
+  // Вычисляем начальное значение
+  runner();
+
   const get = () => {
+    // Если кто-то читает computed, подписываем его
     if (CURRENT_EFFECT) {
-      if (!isInitialized) {
-        isInitialized = true;
-        effect(() => {
-          value = fn();
-        });
+      subs.add(CURRENT_EFFECT);
+      (CURRENT_EFFECT as any).deps?.add(subs);
+
+      const effectName = (CURRENT_EFFECT as any).name;
+      if (effectName) {
+        devtools.trackEffect(CURRENT_EFFECT, effectName, [computedName]);
       }
     }
     return value;
   };
-  
+
   return get;
 }
 
@@ -117,13 +148,13 @@ export function batch(fn: () => void) {
     BATCH_QUEUE.length = 0;
     BATCH_SCHEDULED = true;
   }
-  
+
   fn();
-  
+
   if (!wasBatching) {
     const effects = BATCH_QUEUE.slice();
     BATCH_QUEUE.length = 0;
     BATCH_SCHEDULED = false;
-    effects.forEach(effect => effect());
+    effects.forEach((effect) => effect());
   }
 }
