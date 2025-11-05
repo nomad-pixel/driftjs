@@ -76,6 +76,14 @@ export {
   type ErrorBoundaryProps
 } from './error-boundary';
 
+export {
+  createPortal,
+  Portal,
+  getPortalContainer,
+  removePortal,
+  type PortalProps
+} from './portal';
+
 export { devtools } from './devtools';
 
 export type {

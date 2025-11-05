@@ -56,12 +56,24 @@ const theme = injectContext(ThemeContext);
 - [x] Документация и примеры
 **Время:** 1 день (быстрее оценки!)
 
-### 1.3 Portals
+### 1.3 Portals ✅ ЗАВЕРШЕНО
 **Зачем:** Модальные окна, тултипы, dropdown вне DOM-иерархии
 ```typescript
 createPortal(<Modal />, document.body);
+// или
+<Portal target={document.body}>
+  <Modal />
+</Portal>
 ```
-**Оценка:** 2-3 дня
+**Статус:** ✅ Реализовано в v0.2.0
+- [x] `createPortal(node, target)` функция (React-like API)
+- [x] `<Portal>` компонент (Vue/Solid-like API)
+- [x] Поддержка string селекторов (`target="#modal-root"`)
+- [x] Автоматический cleanup при unmount
+- [x] Интеграция с реактивной системой
+- [x] Примеры: модалки, тултипы, нотификации
+- [x] Документация и примеры
+**Время:** 1 час (быстрее оценки!)
 
 ### 1.4 Suspense для асинхронных компонентов
 **Зачем:** Декларативные loading states, code splitting
