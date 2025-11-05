@@ -131,33 +131,42 @@ export function createRouter(config: RouterConfig) {
   function normalizeRoute(route: RouteComponent | RouteConfig | undefined): RouteConfig | undefined {
     if (!route) return undefined;
     
-    if (typeof route === 'function' || (route as any).component) {
-      if ((route as any).component !== undefined) {
-        return route as RouteConfig;
-      }
+    if (typeof route === 'object' && 'component' in route) {
+      return route as RouteConfig;
+    }
+    
+    if (typeof route === 'function') {
       return { component: route as RouteComponent, meta: {} };
     }
     
     return undefined;
   }
   
-  function isLazyComponent(component: RouteComponent): component is LazyComponent {
-    return typeof component === 'function' && component.length === 0;
-  }
-  
   async function resolveComponent(routeConfig: RouteConfig): Promise<Component> {
     const { component } = routeConfig;
+    const componentString = component.toString();
+    const cacheKey = componentString;
     
-    if (isLazyComponent(component)) {
-      const cacheKey = component.toString();
-      if (loadedComponents.has(cacheKey)) {
-        return loadedComponents.get(cacheKey)!;
+    if (loadedComponents.has(cacheKey)) {
+      return loadedComponents.get(cacheKey)!;
+    }
+    
+    const isLazy = componentString.includes('import(');
+    
+    if (isLazy && typeof component === 'function') {
+      try {
+        const result = (component as LazyComponent)();
+        const module = await result;
+        
+        if (module && module.default) {
+          const resolved = module.default;
+          loadedComponents.set(cacheKey, resolved);
+          return resolved;
+        }
+      } catch (e) {
+        console.error('Failed to load lazy component:', e);
+        throw e;
       }
-      
-      const module = await component();
-      const resolved = module.default;
-      loadedComponents.set(cacheKey, resolved);
-      return resolved;
     }
     
     return component as Component;
@@ -429,77 +438,105 @@ export function createRouter(config: RouterConfig) {
     });
   }
 
-  let routerViewNode: Node | null = null;
-  let currentRouteConfig: RouteConfig | null | undefined = null;
+  let viewContainer: HTMLElement | null = null;
   let currentPath: string | null = null;
-  let isTransitioning = false;
+  let isUpdating = false;
+  
+  async function updateView(path: string, container: HTMLElement) {
+    if (currentPath === path || isUpdating) {
+      return;
+    }
+    
+    isUpdating = true;
+    
+    try {
+      const { routeConfig, params } = findRoute(path);
+      
+      let component: Component | undefined;
+      
+      if (routeConfig) {
+        component = await resolveComponent(routeConfig);
+      }
+      
+      const next = component 
+        ? jsx(component, { ...contextState.value, params }, path) 
+        : document.createTextNode('Not Found');
+      
+      const oldChild = container.firstChild;
+      
+      if (oldChild) {
+        cleanupComponentEffectsInNode(oldChild);
+        
+        if (transition) {
+          await applyTransition(oldChild, next, container);
+        }
+      }
+      
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      
+      container.appendChild(next);
+      
+      currentPath = path;
+    } finally {
+      isUpdating = false;
+    }
+  }
   
   effect(() => {
-    const path = pathState.value;
-    const { routeConfig, params } = findRoute(path);
-    
-    if (routerViewNode && currentRouteConfig === routeConfig && currentPath === path) {
-      return;
+    if (viewContainer) {
+      const path = pathState.value;
+      updateView(path, viewContainer);
     }
-    
-    if (isTransitioning) {
-      return;
-    }
-    
-    isTransitioning = true;
-    
-    (async () => {
-      try {
-        let component: Component | undefined;
-        
-        if (routeConfig) {
-          component = await resolveComponent(routeConfig);
-        }
-        
-        const next = component 
-          ? jsx(component, { ...contextState.value, params }, path) 
-          : document.createTextNode('Not Found');
-        
-        if (routerViewNode && routerViewNode.parentNode && routerViewNode !== next) {
-          cleanupComponentEffectsInNode(routerViewNode);
-          
-          await applyTransition(routerViewNode, next, routerViewNode.parentNode);
-          
-          if (routerViewNode.parentNode) {
-            routerViewNode.parentNode.replaceChild(next, routerViewNode);
-          }
-          routerViewNode = next;
-        } else if (!routerViewNode) {
-          routerViewNode = next;
-        }
-        
-        currentRouteConfig = routeConfig || null;
-        currentPath = path;
-      } finally {
-        isTransitioning = false;
-      }
-    })();
   });
 
   const RouterView: Component = () => {
-    if (!routerViewNode) {
+    if (!viewContainer) {
+      viewContainer = document.createElement('div');
+      viewContainer.setAttribute('data-router-view', 'true');
+      
       const { routeConfig, params, path } = findRoute(pathState.value);
       
       if (routeConfig) {
-        resolveComponent(routeConfig).then(component => {
-          const node = jsx(component, { ...contextState.value, params }, path);
-          if (routerViewNode && routerViewNode.parentNode) {
-            routerViewNode.parentNode.replaceChild(node, routerViewNode);
-          }
-          routerViewNode = node;
-        });
+        const component = routeConfig.component;
+        const isLazy = typeof component === 'function' && component.toString().includes('import(');
         
-        routerViewNode = document.createComment('Loading route...');
+        if (isLazy) {
+          const loading = document.createComment('Loading...');
+          viewContainer.appendChild(loading);
+          
+          resolveComponent(routeConfig).then(resolved => {
+            if (viewContainer && loading.parentNode === viewContainer) {
+              const node = jsx(resolved, { ...contextState.value, params }, path);
+              while (viewContainer.firstChild) {
+                viewContainer.removeChild(viewContainer.firstChild);
+              }
+              viewContainer.appendChild(node);
+              currentPath = path;
+            }
+          }).catch(err => {
+            console.error('Failed to load route:', err);
+            if (viewContainer) {
+              while (viewContainer.firstChild) {
+                viewContainer.removeChild(viewContainer.firstChild);
+              }
+              const errorNode = document.createTextNode('Failed to load route');
+              viewContainer.appendChild(errorNode);
+            }
+          });
+        } else {
+          const node = jsx(component as Component, { ...contextState.value, params }, path);
+          viewContainer.appendChild(node);
+          currentPath = path;
+        }
       } else {
-        routerViewNode = document.createTextNode('Not Found');
+        const notFound = document.createTextNode('Not Found');
+        viewContainer.appendChild(notFound);
+        currentPath = path;
       }
     }
-    return routerViewNode;
+    return viewContainer;
   };
 
   const push = (p: string) => navigate(p);
