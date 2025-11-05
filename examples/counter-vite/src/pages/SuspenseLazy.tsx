@@ -1,4 +1,4 @@
-import { Suspense, lazy, state, setState, type FC } from 'drift-spa';
+import { Suspense, lazy, state, setState, effect, type FC } from 'drift-spa';
 
 // Lazy loaded component
 const LazyHeavyComponent = lazy<{}>(async () => {
@@ -40,8 +40,13 @@ export const SuspenseLazyPage: FC = () => {
   description.style.color = '#666';
   
   const button = document.createElement('button');
-  button.textContent = () => showLazy.value ? 'Hide Component' : 'Load Heavy Component';
   button.style.cssText = 'padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 1rem;';
+  
+  // Reactive text update
+  effect(() => {
+    button.textContent = showLazy.value ? 'Hide Component' : 'Load Heavy Component';
+  });
+  
   button.onclick = () => {
     setState(() => {
       showLazy.value = !showLazy.value;
