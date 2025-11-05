@@ -127,7 +127,7 @@ export interface CSSProperties extends Partial<CSSStyleDeclaration> {
 export interface HTMLAttributes {
   id?: string;
   className?: string;
-  style?: CSSProperties | string;
+  style?: CSSProperties | string | (() => CSSProperties | string);
   title?: string;
   role?: string;
   'aria-label'?: string;

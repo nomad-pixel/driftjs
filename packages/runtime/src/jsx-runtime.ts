@@ -1,5 +1,7 @@
 import { normalizeChild, setProp, Child } from './dom';
 import { effect, setComponentContext, getComponentContext, getComponentEffectIndex, getComponentInstanceKey, cleanupComponentState } from './reactivity';
+import { cleanupContext } from './context';
+import { cleanupScopedServices } from './di';
 
 export type Component<P = {}> = (props: P & { children?: any; key?: any }) => Node;
 
@@ -43,6 +45,8 @@ export function cleanupComponentEffectsByInstanceKey(instanceKey: string) {
     componentEffects.delete(instanceKey);
   }
   cleanupComponentState(instanceKey);
+  cleanupContext(instanceKey);
+  cleanupScopedServices(instanceKey);
 }
 
 export function cleanupComponentEffectsInNode(node: Node) {
@@ -69,41 +73,16 @@ function appendChildren(parent: Node, children: any) {
 
 
 function createElementWithKey(type: string, props: Record<string, any>, key?: any): Node {
-  const cacheKey = key ? `${type}:${key}` : null;
-  
-  
-  if (cacheKey && componentCache.has(cacheKey)) {
-    const cached = componentCache.get(cacheKey)!;
-    
-    if (cached.props !== props) {
-      updateElementProps(cached.node as Element, props);
-      cached.props = props;
-    }
-    return cached.node.cloneNode(true);
-  }
-  
   const el = document.createElement(type);
   updateElementProps(el, props);
   appendChildren(el, props.children);
-  
-  
-  if (cacheKey) {
-    componentCache.set(cacheKey, { node: el.cloneNode(true), props });
-  }
-  
   return el;
 }
 
 function updateElementProps(el: Element, props: Record<string, any>) {
   for (const [k, v] of Object.entries(props)) {
     if (k === 'children' || k === 'key') continue;
-    
-    if (typeof v === 'function' && !/^on[A-Z]/.test(k)) {
-      
-      effect(() => setProp(el, k, (v as Function)()));
-    } else {
-      setProp(el, k, v);
-    }
+    setProp(el, k, v);
   }
 }
 

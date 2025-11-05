@@ -68,9 +68,51 @@ const eventHandlers = new WeakMap<Element, Map<string, EventListener>>();
 export function setProp(el: Element, key: string, value: any) {
   if (key === 'ref' && typeof value === 'function') { value(el); return; }
   if (key === 'className') { (el as any).className = value ?? ''; return; }
-  if (key === 'style' && value && typeof value === 'object') {
-    Object.assign((el as HTMLElement).style, value);
-    return;
+  if (key === 'style') {
+    if (typeof value === 'function') {
+      let cleanup: (() => void) | null = null;
+      
+      const applyStyles = () => {
+        if (cleanup) {
+          cleanup();
+          cleanup = null;
+        }
+        
+        cleanup = effect(() => {
+          const styleObj = value();
+          
+          if (!el.isConnected) {
+            return;
+          }
+          
+          if (styleObj && typeof styleObj === 'object') {
+            Object.assign((el as HTMLElement).style, styleObj);
+          }
+        });
+      };
+      
+      if (el.isConnected) {
+        applyStyles();
+      } else {
+        const observer = new MutationObserver(() => {
+          if (el.isConnected) {
+            observer.disconnect();
+            applyStyles();
+          }
+        });
+        
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        setTimeout(() => {
+          observer.disconnect();
+        }, 5000);
+      }
+      
+      return;
+    } else if (value && typeof value === 'object') {
+      Object.assign((el as HTMLElement).style, value);
+      return;
+    }
   }
   if (/^on[A-Z]/.test(key) && typeof value === 'function') {
     const name = key.slice(2).toLowerCase();

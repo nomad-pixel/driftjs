@@ -31,6 +31,33 @@ export {
 } from './router';
 
 export {
+  createContext,
+  provide as provideContext,
+  inject as injectContext,
+  createProvider,
+  hasContext,
+  cleanupContext,
+  type Context
+} from './context';
+
+export {
+  provide,
+  inject,
+  injectAll,
+  createModule,
+  provideModule,
+  Injectable,
+  hasService,
+  clearAllServices,
+  cleanupScopedServices,
+  getAllServices,
+  type ServiceScope,
+  type ServiceOptions,
+  type ServiceClass,
+  type Module
+} from './di';
+
+export {
   memo,
   VirtualList,
   lazy,

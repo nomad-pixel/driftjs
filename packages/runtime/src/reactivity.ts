@@ -514,7 +514,6 @@ export function cleanupComponentState(instanceKey: string) {
   componentStateStorage.delete(instanceKey);
   componentEffectStorage.delete(instanceKey);
   componentComputedStorage.delete(instanceKey);
-  
 }
 
 let CURRENT_COMPONENT_CONTEXT: Set<() => void> | null = null;
