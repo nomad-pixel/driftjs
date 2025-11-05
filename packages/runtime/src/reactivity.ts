@@ -141,11 +141,134 @@ export function effect(
   fn: EffectFn,
   deps?: any[]
 ): () => void {
-  const effectId = ++EFFECT_COUNTER;
-  const effectName = `effect-${effectId}`;
   const isInComponent = CURRENT_COMPONENT_CONTEXT !== null;
   const hasDeps = deps !== undefined;
-  const effectIndex = isInComponent ? CURRENT_COMPONENT_EFFECT_INDEX++ : -1;
+  
+  if (isInComponent && CURRENT_COMPONENT_INSTANCE_KEY !== null) {
+    if (!componentEffectStorage.has(CURRENT_COMPONENT_INSTANCE_KEY)) {
+      componentEffectStorage.set(CURRENT_COMPONENT_INSTANCE_KEY, []);
+    }
+    const effects = componentEffectStorage.get(CURRENT_COMPONENT_INSTANCE_KEY)!;
+    const effectIndex = CURRENT_COMPONENT_EFFECT_INDEX;
+    
+    
+    if (effects[effectIndex]) {
+      const existingCleanup = effects[effectIndex];
+      const existingRunner = (existingCleanup as any)._runner as EffectRunner;
+      const existingHasDeps = (existingCleanup as any)._hasDeps;
+      const existingDeps = (existingCleanup as any)._deps;
+      const existingPrevDeps = (existingCleanup as any)._prevDeps;
+      
+      
+      if (existingRunner) {
+        existingRunner.disposed = false;
+        
+        if (hasDeps && deps!.length === 0) {
+          if (existingRunner._runOnce) {
+            if ((existingRunner as any)._hasRun) {
+              CURRENT_COMPONENT_EFFECT_INDEX++;
+              return existingCleanup;
+            } else {
+              scheduleEffect(existingRunner, EffectPriority.NORMAL);
+              CURRENT_COMPONENT_EFFECT_INDEX++;
+              return existingCleanup;
+            }
+          }
+        } else if (hasDeps && deps!.length > 0) {
+          const currentDeps = deps!.map(d => {
+            if (d && typeof d === 'object' && 'value' in d) {
+              return (d as any).value;
+            }
+            return d;
+          });
+          
+          const depsChanged = existingPrevDeps === undefined ||
+            existingPrevDeps.length !== currentDeps.length ||
+            currentDeps.some((d, i) => !Object.is(d, existingPrevDeps![i]));
+          
+          
+          (existingRunner as any)._prevDeps = currentDeps;
+          (existingCleanup as any)._prevDeps = currentDeps;
+          
+          const oldWatchers = (existingRunner as any)._depsWatchers as any[];
+          if (oldWatchers && oldWatchers.length > 0) {
+            oldWatchers.forEach((watcher: any) => {
+              watcher.disposed = true;
+              deps!.forEach((dep) => {
+                if (dep && typeof dep === 'object' && (dep as any)._subscribers) {
+                  (dep as any)._subscribers.delete(watcher);
+                }
+              });
+            });
+          }
+          
+          (existingRunner as any)._depsWatchers = [];
+          
+          const checkDeps = () => {
+            const currentDeps = deps!.map(d => {
+              if (d && typeof d === 'object' && 'value' in d) {
+                return (d as any).value;
+              }
+              return d;
+            });
+            const changed = (existingRunner as any)._prevDeps === undefined ||
+              (existingRunner as any)._prevDeps.length !== currentDeps.length ||
+              currentDeps.some((d: any, i: number) => !Object.is(d, (existingRunner as any)._prevDeps![i]));
+            if (changed) {
+              (existingRunner as any)._prevDeps = currentDeps;
+              scheduleEffect(existingRunner, EffectPriority.NORMAL);
+            }
+          };
+          
+          (existingRunner as any)._checkDeps = checkDeps;
+          
+          deps!.forEach((dep) => {
+            if (dep && typeof dep === 'object') {
+              const stateDep = dep as any;
+              if (stateDep._subscribers) {
+                const depWatcher: EffectRunner = () => {
+                  if (!depWatcher.disposed) {
+                    checkDeps();
+                  }
+                };
+                depWatcher._isEffect = true;
+                depWatcher.deps = new Set();
+                depWatcher.disposed = false;
+                depWatcher.priority = EffectPriority.HIGH;
+                Object.defineProperty(depWatcher, "name", {
+                  value: `${existingRunner.name}-watcher`,
+                  writable: true,
+                  configurable: true
+                });
+                stateDep._subscribers.add(depWatcher);
+                (existingRunner as any)._depsWatchers.push(depWatcher);
+              }
+            }
+          });
+          
+          if (!depsChanged) {
+            CURRENT_COMPONENT_EFFECT_INDEX++;
+            return existingCleanup;
+          }
+          
+          scheduleEffect(existingRunner, EffectPriority.NORMAL);
+          CURRENT_COMPONENT_EFFECT_INDEX++;
+          return existingCleanup;
+        } else if (!hasDeps) {
+          scheduleEffect(existingRunner, EffectPriority.NORMAL);
+          CURRENT_COMPONENT_EFFECT_INDEX++;
+          return existingCleanup;
+        }
+      }
+    }
+    
+    CURRENT_COMPONENT_EFFECT_INDEX++;
+  }
+  
+  const effectIndex = isInComponent ? CURRENT_COMPONENT_EFFECT_INDEX - 1 : -1;
+  
+  const effectId = ++EFFECT_COUNTER;
+  const effectName = `effect-${effectId}`;
 
   let cleanupFn: (() => void) | undefined;
   let prevDeps: any[] | undefined = hasDeps ? deps.map(dep => {
@@ -154,20 +277,16 @@ export function effect(
     }
     return dep;
   }) : undefined;
-  let isFirstRun = true;
+  let prevCleanupFn: (() => void) | undefined;
 
   const runEffect = () => {
-    if (isFirstRun) {
-      isFirstRun = false;
-    } else {
-      if (cleanupFn) {
-        try {
-          cleanupFn();
-        } catch (error) {
-          console.error(`Cleanup error in effect ${effectName}:`, error);
-        }
-        cleanupFn = undefined;
+    if (prevCleanupFn) {
+      try {
+        prevCleanupFn();
+      } catch (error) {
+        console.error(`Cleanup error in effect ${effectName}:`, error);
       }
+      prevCleanupFn = undefined;
     }
 
     const prevEffect = CURRENT_EFFECT;
@@ -184,6 +303,7 @@ export function effect(
       if (result instanceof Promise) {
         result.then((cleanup) => {
           if (typeof cleanup === 'function') {
+            prevCleanupFn = cleanup;
             cleanupFn = cleanup;
           }
         }).catch((error) => {
@@ -191,6 +311,7 @@ export function effect(
         });
       } else {
         if (typeof result === 'function') {
+          prevCleanupFn = result;
           cleanupFn = result;
         }
       }
@@ -206,7 +327,10 @@ export function effect(
 
     if (hasDeps) {
       if (deps!.length === 0) {
-        if (!isFirstRun) return;
+        if ((runner as any)._hasRun) {
+          return;
+        }
+        (runner as any)._hasRun = true;
       } else {
         const currentDeps = deps!.map(dep => {
           if (dep && typeof dep === 'object' && 'value' in dep) {
@@ -219,7 +343,7 @@ export function effect(
           prevDeps.length !== currentDeps.length ||
           currentDeps.some((dep, i) => !Object.is(dep, prevDeps![i]));
         
-        if (!depsChanged && !isFirstRun) {
+        if (!depsChanged) {
           return;
         }
         
@@ -229,6 +353,8 @@ export function effect(
 
     runEffect();
   };
+  
+  (runner as any)._prevDeps = prevDeps;
 
   runner._isEffect = true;
   runner.deps = new Set();
@@ -247,7 +373,10 @@ export function effect(
   
   if (hasDeps && deps!.length === 0) {
     runner._runOnce = true;
-    scheduleEffect(runner, EffectPriority.NORMAL);
+    (runner as any)._hasRun = false;
+    if (!isInComponent || !CURRENT_COMPONENT_INSTANCE_KEY || !componentEffectStorage.get(CURRENT_COMPONENT_INSTANCE_KEY)?.[CURRENT_COMPONENT_EFFECT_INDEX - 1]) {
+      scheduleEffect(runner, EffectPriority.NORMAL);
+    }
   } else if (hasDeps && deps!.length > 0) {
     const checkDeps = () => {
       const currentDeps = deps!.map(d => {
@@ -256,14 +385,17 @@ export function effect(
         }
         return d;
       });
-      const changed = prevDeps === undefined ||
-        prevDeps.length !== currentDeps.length ||
-        currentDeps.some((d, i) => !Object.is(d, prevDeps![i]));
+      const storedPrevDeps = (runner as any)._prevDeps;
+      const changed = storedPrevDeps === undefined ||
+        storedPrevDeps.length !== currentDeps.length ||
+        currentDeps.some((d, i) => !Object.is(d, storedPrevDeps![i]));
       if (changed) {
-        prevDeps = currentDeps;
+        (runner as any)._prevDeps = currentDeps;
         scheduleEffect(runner, EffectPriority.NORMAL);
       }
     };
+    
+    (runner as any)._checkDeps = checkDeps;
     
     deps!.forEach((dep) => {
       if (dep && typeof dep === 'object') {
@@ -303,7 +435,6 @@ export function effect(
   const cleanupFunction = () => {
     if (runner.disposed) return;
     
-    
     runner.disposed = true;
     
     depsCleanups.forEach(cleanup => cleanup());
@@ -321,9 +452,23 @@ export function effect(
     
     getQueueForPriority(EffectPriority.NORMAL).delete(runner);
   };
+  
+  (cleanupFunction as any)._runner = runner;
+  (cleanupFunction as any)._prevDeps = prevDeps;
+  (cleanupFunction as any)._hasDeps = hasDeps;
+  (cleanupFunction as any)._deps = deps;
 
   if (isInComponent && CURRENT_COMPONENT_CONTEXT) {
     CURRENT_COMPONENT_CONTEXT.add(cleanupFunction);
+    
+    if (CURRENT_COMPONENT_INSTANCE_KEY !== null) {
+      if (!componentEffectStorage.has(CURRENT_COMPONENT_INSTANCE_KEY)) {
+        componentEffectStorage.set(CURRENT_COMPONENT_INSTANCE_KEY, []);
+      }
+      const effects = componentEffectStorage.get(CURRENT_COMPONENT_INSTANCE_KEY)!;
+      const effectIndex = CURRENT_COMPONENT_EFFECT_INDEX - 1;
+      effects[effectIndex] = cleanupFunction;
+    }
   }
 
   return cleanupFunction;
@@ -333,15 +478,30 @@ let componentEffectCounter = 0;
 
 const componentStateStorage = new Map<string, StateVariable<any>[]>();
 const componentComputedStorage = new Map<string, any[]>();
+const componentEffectStorage = new Map<string, (() => void)[]>();
 
 export function cleanupComponentState(instanceKey: string) {
-  componentStateStorage.delete(instanceKey);
+  
+  const effects = componentEffectStorage.get(instanceKey);
+  if (effects) {
+    effects.forEach(cleanupFn => {
+      if (cleanupFn && typeof cleanupFn === 'function') {
+        const runner = (cleanupFn as any)._runner as EffectRunner;
+        if (runner && !runner.disposed) {
+          runner.disposed = true;
+        }
+      }
+    });
+  }
+  
   const computeds = componentComputedStorage.get(instanceKey);
   if (computeds) {
     computeds.forEach(computedFn => {
       if (computedFn && typeof computedFn === 'function' && (computedFn as any)._runner) {
         const runner = (computedFn as any)._runner as EffectRunner;
-        runner.disposed = true;
+        if (!runner.disposed) {
+          runner.disposed = true;
+        }
         const closure = (runner as any)._closure;
         if (closure) {
           closure.currentPromise = null;
@@ -350,6 +510,11 @@ export function cleanupComponentState(instanceKey: string) {
       }
     });
   }
+  
+  componentStateStorage.delete(instanceKey);
+  componentEffectStorage.delete(instanceKey);
+  componentComputedStorage.delete(instanceKey);
+  
 }
 
 let CURRENT_COMPONENT_CONTEXT: Set<() => void> | null = null;
@@ -374,8 +539,16 @@ export function getComponentEffectIndex(): number {
   return CURRENT_COMPONENT_EFFECT_INDEX;
 }
 
+export function setComponentEffectIndex(index: number) {
+  CURRENT_COMPONENT_EFFECT_INDEX = index;
+}
+
 export function getComponentInstanceKey(): string | null {
   return CURRENT_COMPONENT_INSTANCE_KEY;
+}
+
+export function setComponentInstanceKey(key: string | null) {
+  CURRENT_COMPONENT_INSTANCE_KEY = key;
 }
 
 export function untrack<T>(fn: () => T): T {
@@ -435,7 +608,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
                   closure.value = existingData.value;
                 }
               } else {
-                console.log(`[${existingRunner.name}] Keeping existing value in closure:`, closure.value);
               }
               
               if (!hadPreviousValue) {
@@ -444,14 +616,11 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
                 }
                 if (closure.value !== undefined && closure.value !== null && closure.previousValue === undefined) {
                   closure.previousValue = closure.value;
-                  console.log(`[${existingRunner.name}] Initialized previousValue from value during restoration`);
                 }
               } else {
-                console.log(`[${existingRunner.name}] Keeping existing previousValue in closure:`, closure.previousValue);
               }
               
               if (closure.currentPromise) {
-                console.log(`[${existingRunner.name}] Has pending Promise, will wait for it in background`);
                 const pendingPromise = closure.currentPromise;
                 closure.currentPromise = null;
                 pendingPromise.then((pendingValue: T) => {
@@ -460,7 +629,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
                         (typeof pendingValue === 'object' && pendingValue !== null && 
                          typeof closure.value === 'object' && closure.value !== null &&
                          (pendingValue as any).id !== (closure.value as any).id)) {
-                      console.log(`[${existingRunner.name}] Pending Promise resolved with newer value:`, pendingValue);
                       closure.value = pendingValue;
                       closure.previousValue = closure.previousValue || closure.value;
                       const currentSubs = (existingComputed as any)._subs as Set<EffectRunner>;
@@ -480,25 +648,20 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
               
               closure.isPending = false;
               closure.currentPromise = null;
-              console.log(`[${existingRunner.name}] Restored computed state: value:`, closure.value, 'previousValue:', closure.previousValue, 'isPending:', closure.isPending, 'hadValue:', hadValue);
               
               const restoredSubs = (existingComputed as any)._subs as Set<EffectRunner>;
               if (restoredSubs) {
                 restoredSubs.clear();
-                console.log(`[${existingRunner.name}] Cleared old subscribers - new effects will subscribe on next render`);
               }
               
               (existingRunner as any)._restorationRun = true;
               scheduleEffect(existingRunner, existingRunner.priority ?? EffectPriority.HIGH);
-              console.log(`[${existingRunner.name}] Scheduled runner to re-subscribe to dependencies (restoration mode)`);
             } else {
-              console.log(`[${existingRunner.name}] Computed already active, not restoring`);
             }
           }
         } else {
           if (existingRunner.disposed) {
             existingRunner.disposed = false;
-            console.log(`[${existingRunner.name}] Restoring disposed computed (no saved data)`);
           }
         }
       }
@@ -520,7 +683,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
   const runner: EffectRunner = async () => {
     if (runner.disposed) return;
     
-    console.log(`[${computedName}] Runner called`);
     
     const previousPromise = closure.currentPromise;
     cleanup(runner);
@@ -530,7 +692,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
     const isRestorationRun = (runner as any)._restorationRun;
     if (isRestorationRun) {
       (runner as any)._restorationRun = false;
-      console.log(`[${computedName}] Restoration run - just subscribing to dependencies, not recalculating`);
       fn();
       CURRENT_EFFECT = prevEffect;
       return;
@@ -539,13 +700,10 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
     const previousValueBeforeUpdate = closure.previousValue;
     if (closure.value !== undefined && closure.value !== null) {
       closure.previousValue = closure.value;
-      console.log(`[${computedName}] Saved previousValue:`, closure.previousValue, 'from value:', closure.value);
     }
     
     try {
-      console.log(`[${computedName}] Calling fn(), CURRENT_EFFECT:`, CURRENT_EFFECT?.name);
       const result = fn();
-      console.log(`[${computedName}] fn() returned:`, result instanceof Promise ? 'Promise' : result);
       
       if (result instanceof Promise) {
         const hasValue = closure.value !== undefined && closure.value !== null;
@@ -554,10 +712,8 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
         closure.currentPromise = result;
         
         if (hasValue || hasPreviousValue) {
-          console.log(`[${computedName}] Result is Promise, setting isPending = true (hasValue: ${hasValue}, hasPreviousValue: ${hasPreviousValue})`);
           closure.isPending = true;
         } else {
-          console.log(`[${computedName}] Result is Promise, but no previous value, not setting isPending`);
         }
         
         subs.forEach((sub) => {
@@ -567,14 +723,11 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
         });
         
         try {
-          console.log(`[${computedName}] Awaiting Promise...`);
           const newValue = await result;
           if (closure.currentPromise === result && !runner.disposed) {
-            console.log(`[${computedName}] Promise resolved, newValue:`, newValue, 'currentPromise === result:', closure.currentPromise === result, 'disposed:', runner.disposed);
             closure.value = newValue;
             closure.isPending = false;
             closure.currentPromise = null;
-            console.log(`[${computedName}] Updated value, isPending = false`);
             
             devtools.updateEffect(runner);
             
@@ -584,17 +737,13 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
               }
             });
           } else if (closure.currentPromise !== result) {
-            console.log(`[${computedName}] Promise resolved but was replaced by new one`);
             if (runner.disposed) {
-              console.log(`[${computedName}] Runner was disposed, saving value for restoration`);
               closure.value = newValue;
               closure.isPending = false;
               closure.currentPromise = null;
             } else {
-              console.log(`[${computedName}] Ignoring old result (new Promise active)`);
             }
           } else {
-            console.log(`[${computedName}] Runner was disposed, but value was saved for restoration`);
             closure.value = newValue;
             closure.isPending = false;
             closure.currentPromise = null;
@@ -605,7 +754,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
           console.error(`Computed ${computedName} promise error:`, promiseError);
         }
       } else {
-        console.log(`[${computedName}] Result is not Promise, setting value:`, result);
         if (!runner.disposed) {
           closure.value = result;
           devtools.updateEffect(runner);
@@ -643,7 +791,6 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
   runner();
 
   const get = (): T => {
-    console.log(`[${computedName}] get() called, isPending:`, closure.isPending, 'previousValue:', closure.previousValue, 'value:', closure.value);
     
     if (CURRENT_EFFECT) {
       subs.add(CURRENT_EFFECT);
@@ -659,18 +806,14 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
     
     if (closure.isPending) {
       if (closure.previousValue !== undefined && closure.previousValue !== null) {
-        console.log(`[${computedName}] Returning previousValue:`, closure.previousValue);
         return closure.previousValue;
       }
       if (closure.value !== undefined && closure.value !== null) {
-        console.log(`[${computedName}] isPending, returning current value:`, closure.value);
         return closure.value;
       }
-      console.log(`[${computedName}] isPending but no value, returning undefined`);
       return closure.value;
     }
     
-    console.log(`[${computedName}] Returning value:`, closure.value);
     return closure.value;
   };
   
@@ -831,19 +974,14 @@ function createStateProxy<T>(stateVar: StateVariable<T>): StateVariable<ExpandLi
     set(newValue) {
       if (Object.is(stateVar._value, newValue)) return;
       
-      if (stateVar._name && stateVar._name.includes('userId')) {
-        console.log(`[${stateVar._name}] Changing value from`, stateVar._value, 'to', newValue, 'subscribers:', stateVar._subscribers.size);
-      }
       
       stateVar._value = newValue;
+      
       
       if (SET_STATE_ACTIVE && SET_STATE_CHANGED) {
         SET_STATE_CHANGED.add(stateVar);
       } else {
         stateVar._subscribers.forEach(fn => {
-          if (stateVar._name && stateVar._name.includes('userId')) {
-            console.log(`[${stateVar._name}] Scheduling effect:`, fn.name || 'unnamed');
-          }
           scheduleEffect(fn);
         });
       }
@@ -864,11 +1002,13 @@ export function state<T>(initial: T, name?: string): StateVariable<ExpandLiteral
     const stateIndex = CURRENT_COMPONENT_STATE_INDEX++;
     
     if (states[stateIndex]) {
-      return states[stateIndex] as StateVariable<ExpandLiteral<T>> & ExpandLiteral<T> & { value: ExpandLiteral<T> };
+      const existingState = states[stateIndex] as StateVariable<ExpandLiteral<T>> & ExpandLiteral<T> & { value: ExpandLiteral<T> };
+      return existingState;
     }
     
     const stateId = ++SIGNAL_COUNTER;
     const stateName = name || `state-${stateId}`;
+    
     
     const stateVar: StateVariable<T> = {
       _value: initial,
@@ -908,14 +1048,8 @@ export function setState(fn: () => void) {
     
     batch(() => {
       changedStates.forEach(stateVar => {
-        if (stateVar._name && stateVar._name.includes('userId')) {
-          console.log(`[setState] Notifying ${stateVar._subscribers.size} subscribers for ${stateVar._name}`);
-        }
         stateVar._subscribers.forEach(fn => {
           if (!fn.disposed) {
-            if (stateVar._name && stateVar._name.includes('userId')) {
-              console.log(`[setState] Scheduling effect:`, fn.name || 'unnamed');
-            }
             scheduleEffect(fn, fn.priority ?? EffectPriority.NORMAL);
           }
         });

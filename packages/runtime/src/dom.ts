@@ -1,4 +1,4 @@
-import { effect } from './reactivity';
+import { effect, getComponentContext, setComponentContext, getComponentInstanceKey, setComponentInstanceKey, getComponentEffectIndex, setComponentEffectIndex } from './reactivity';
 
 export type Child = Node | string | number | boolean | null | undefined | (() => any) | Child[];
 export function isNode(v: any): v is Node { return v instanceof Node; }
@@ -11,8 +11,22 @@ export function normalizeChild(child: Child): Node {
     const container = document.createElement('span');
     container.style.display = 'contents';
     
+    const savedContext = getComponentContext();
+    const savedInstanceKey = getComponentInstanceKey();
+    const savedEffectIndex = getComponentEffectIndex();
+    
+    setComponentContext(null);
+    setComponentInstanceKey(null);
+    setComponentEffectIndex(0);
+    
+    let isInitialized = false;
     effect(() => {
       const v = child();
+      
+      if (!isInitialized && (v == null || v === false)) {
+        return;
+      }
+      isInitialized = true;
       
       while (container.firstChild) {
         container.removeChild(container.firstChild);
@@ -32,6 +46,11 @@ export function normalizeChild(child: Child): Node {
         container.appendChild(document.createTextNode(String(v)));
       }
     });
+    
+    setComponentContext(savedContext);
+    setComponentInstanceKey(savedInstanceKey);
+    setComponentEffectIndex(savedEffectIndex);
+    
     return container;
   }
 

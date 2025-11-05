@@ -181,10 +181,17 @@ export function createRouter(config: RouterConfig) {
   }
 
   let routerViewNode: Node | null = null;
+  let currentComponent: Component | null | undefined = null;
+  let currentPath: string | null = null;
   
   effect(() => {
-    const currentPath = pathState.value;
-    const { component, params, path } = findRoute(currentPath);
+    const path = pathState.value;
+    const { component, params } = findRoute(path);
+    
+    if (routerViewNode && currentComponent === component && currentPath === path) {
+      return;
+    }
+    
     const next = component ? jsx(component, { ...contextState.value, params }, path) : document.createTextNode('Not Found');
     
     if (routerViewNode && routerViewNode.parentNode && routerViewNode !== next) {
@@ -194,6 +201,9 @@ export function createRouter(config: RouterConfig) {
     } else if (!routerViewNode) {
       routerViewNode = next;
     }
+    
+    currentComponent = component || null;
+    currentPath = path;
   });
 
   const RouterView: Component = () => {
