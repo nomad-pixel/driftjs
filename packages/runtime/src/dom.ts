@@ -8,12 +8,31 @@ export function normalizeChild(child: Child): Node {
   if (isNode(child)) return child;
 
   if (typeof child === 'function') {
-    const text = document.createTextNode('');
+    const container = document.createElement('span');
+    container.style.display = 'contents';
+    
     effect(() => {
       const v = child();
-      text.textContent = v == null ? '' : String(v);
+      
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      
+      if (v == null || v === false) {
+        return;
+      } else if (isNode(v)) {
+        container.appendChild(v);
+      } else if (Array.isArray(v)) {
+        v.forEach(c => {
+          if (c != null && c !== false) {
+            container.appendChild(normalizeChild(c as any));
+          }
+        });
+      } else {
+        container.appendChild(document.createTextNode(String(v)));
+      }
     });
-    return text;
+    return container;
   }
 
   if (Array.isArray(child)) {
@@ -25,6 +44,8 @@ export function normalizeChild(child: Child): Node {
   return document.createTextNode(String(child));
 }
 
+const eventHandlers = new WeakMap<Element, Map<string, EventListener>>();
+
 export function setProp(el: Element, key: string, value: any) {
   if (key === 'ref' && typeof value === 'function') { value(el); return; }
   if (key === 'className') { (el as any).className = value ?? ''; return; }
@@ -34,6 +55,15 @@ export function setProp(el: Element, key: string, value: any) {
   }
   if (/^on[A-Z]/.test(key) && typeof value === 'function') {
     const name = key.slice(2).toLowerCase();
+    if (!eventHandlers.has(el)) {
+      eventHandlers.set(el, new Map());
+    }
+    const handlers = eventHandlers.get(el)!;
+    const oldHandler = handlers.get(name);
+    if (oldHandler) {
+      el.removeEventListener(name, oldHandler);
+    }
+    handlers.set(name, value as EventListener);
     el.addEventListener(name, value as EventListener);
     return;
   }

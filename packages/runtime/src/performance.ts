@@ -1,5 +1,5 @@
 
-import { createSignal, createComputed, effect } from './reactivity';
+import { state, setState, computed, effect } from './reactivity';
 import type { Component } from './jsx-runtime';
 
 
@@ -38,18 +38,18 @@ interface VirtualListProps<T> {
 export function VirtualList<T>(props: VirtualListProps<T>): Node {
   const { items, itemHeight, containerHeight, renderItem, overscan = 5 } = props;
   
-  const [scrollTop, setScrollTop] = createSignal(0);
+  let scrollTop = state(0);
   
-  const visibleRange = createComputed(() => {
-    const start = Math.max(0, Math.floor(scrollTop() / itemHeight) - overscan);
+  const visibleRange = computed(() => {
+    const start = Math.max(0, Math.floor(scrollTop.value / itemHeight) - overscan);
     const end = Math.min(
       items.length - 1,
-      Math.ceil((scrollTop() + containerHeight) / itemHeight) + overscan
+      Math.ceil((scrollTop.value + containerHeight) / itemHeight) + overscan
     );
     return { start, end };
   });
   
-  const visibleItems = createComputed(() => {
+  const visibleItems = computed(() => {
     const { start, end } = visibleRange();
     return items.slice(start, end + 1).map((item, index) => ({
       item,
@@ -58,7 +58,7 @@ export function VirtualList<T>(props: VirtualListProps<T>): Node {
   });
   
   const totalHeight = items.length * itemHeight;
-  const offsetY = createComputed(() => visibleRange().start * itemHeight);
+  const offsetY = computed(() => visibleRange().start * itemHeight);
   
   const container = document.createElement('div');
   container.style.cssText = `
@@ -69,7 +69,9 @@ export function VirtualList<T>(props: VirtualListProps<T>): Node {
   
   const scrollHandler = (e: Event) => {
     const target = e.target as HTMLElement;
-    setScrollTop(target.scrollTop);
+    setState(() => {
+      scrollTop.value = target.scrollTop;
+    });
   };
   
   container.addEventListener('scroll', scrollHandler);
@@ -185,12 +187,14 @@ export function useIntersectionObserver(
   callback: (isIntersecting: boolean) => void,
   options?: IntersectionObserverInit
 ) {
-  const [isIntersecting, setIsIntersecting] = createSignal(false);
+  let isIntersecting = state(false);
   
   const observer = new IntersectionObserver((entries) => {
     const entry = entries[0];
     const intersecting = entry.isIntersecting;
-    setIsIntersecting(intersecting);
+    setState(() => {
+      isIntersecting.value = intersecting;
+    });
     callback(intersecting);
   }, options);
   
@@ -207,7 +211,7 @@ export function useIntersectionObserver(
   };
   
   return {
-    isIntersecting,
+    isIntersecting: () => isIntersecting.value,
     observe,
     unobserve,
     disconnect

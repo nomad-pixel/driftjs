@@ -1,8 +1,14 @@
 export { 
-  createSignal, 
-  createComputed, 
-  effect, 
-  batch 
+  computed, 
+  effect,
+  batch,
+  state,
+  setState,
+  untrack,
+  EffectPriority,
+  trackComponentEffect,
+  cleanupComponentEffects,
+  type EffectOptions
 } from './reactivity';
 
 export { 

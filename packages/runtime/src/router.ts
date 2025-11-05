@@ -1,6 +1,6 @@
-import { createSignal, effect } from './reactivity';
+import { state, setState, effect } from './reactivity';
+import { jsx, cleanupComponentEffectsInNode } from './jsx-runtime';
 import type { Component } from './jsx-runtime';
-import type { Signal } from './types';
 
 type RouteMap = Record<string, Component<any> | undefined>;
 type RouteGuard = (to: string, from: string) => boolean | string | Promise<boolean | string>;
@@ -24,8 +24,8 @@ export interface Router {
   RouterView: Component;
   push: (path: string) => Promise<boolean>;
   replace: (path: string) => void;
-  path: Signal<string>;
-  context: Signal<RouteContext>;
+  path: () => string;
+  context: () => RouteContext;
 }
 
 
@@ -39,8 +39,8 @@ export function createRouter(config: RouterConfig) {
     return location.hash.slice(1) || '/';
   };
   
-  const [path, setPath] = createSignal(getPath());
-  const [context, setContext] = createSignal<RouteContext>({
+  let pathState = state(getPath());
+  let contextState = state<RouteContext>({
     path: getPath(),
     params: {},
     query: {}
@@ -76,12 +76,12 @@ export function createRouter(config: RouterConfig) {
   }
 
   
-  function findRoute(currentPath: string): { component: Component<any> | undefined; params: Record<string, string> } {
+  function findRoute(currentPath: string): { component: Component<any> | undefined; params: Record<string, string>; path: string } {
     const pathWithoutQuery = currentPath.split('?')[0];
     
     
     if (routes[pathWithoutQuery]) {
-      return { component: routes[pathWithoutQuery], params: {} };
+      return { component: routes[pathWithoutQuery], params: {}, path: pathWithoutQuery };
     }
     
     
@@ -103,17 +103,17 @@ export function createRouter(config: RouterConfig) {
           }
           
           if (matches) {
-            return { component, params: parseParams(routePath, pathWithoutQuery) };
+            return { component, params: parseParams(routePath, pathWithoutQuery), path: pathWithoutQuery };
           }
         }
       }
     }
     
-    return { component: routes['*'], params: {} };
+    return { component: routes['*'], params: {}, path: pathWithoutQuery };
   }
 
   
-  async function navigate(to: string, from: string = path()) {
+  async function navigate(to: string, from: string = pathState.value) {
     
     if (beforeEach) {
       const result = await beforeEach(to, from);
@@ -142,8 +142,10 @@ export function createRouter(config: RouterConfig) {
       query: parseQuery(to.split('?')[1] || '')
     };
     
-    setPath(to);
-    setContext(newContext);
+    setState(() => {
+      pathState.value = to;
+      contextState.value = newContext;
+    });
     
     
     afterEach?.(to, from);
@@ -155,34 +157,51 @@ export function createRouter(config: RouterConfig) {
   if (mode === 'history') {
     window.addEventListener('popstate', () => {
       const newPath = getPath();
-      setPath(newPath);
-      setContext({
-        path: newPath,
-        params: findRoute(newPath).params,
-        query: parseQuery(newPath.split('?')[1] || '')
+      setState(() => {
+        pathState.value = newPath;
+        contextState.value = {
+          path: newPath,
+          params: findRoute(newPath).params,
+          query: parseQuery(newPath.split('?')[1] || '')
+        };
       });
     });
   } else {
     window.addEventListener('hashchange', () => {
       const newPath = getPath();
-      setPath(newPath);
-      setContext({
-        path: newPath,
-        params: findRoute(newPath).params,
-        query: parseQuery(newPath.split('?')[1] || '')
+      setState(() => {
+        pathState.value = newPath;
+        contextState.value = {
+          path: newPath,
+          params: findRoute(newPath).params,
+          query: parseQuery(newPath.split('?')[1] || '')
+        };
       });
     });
   }
 
+  let routerViewNode: Node | null = null;
+  
+  effect(() => {
+    const currentPath = pathState.value;
+    const { component, params, path } = findRoute(currentPath);
+    const next = component ? jsx(component, { ...contextState.value, params }, path) : document.createTextNode('Not Found');
+    
+    if (routerViewNode && routerViewNode.parentNode && routerViewNode !== next) {
+      cleanupComponentEffectsInNode(routerViewNode);
+      routerViewNode.parentNode.replaceChild(next, routerViewNode);
+      routerViewNode = next;
+    } else if (!routerViewNode) {
+      routerViewNode = next;
+    }
+  });
+
   const RouterView: Component = () => {
-    let node: Node = document.createComment('router-view');
-    effect(() => {
-      const { component, params } = findRoute(path());
-      const next = component ? component({ ...context(), params }) : document.createTextNode('Not Found');
-      node.parentNode?.replaceChild(next, node);
-      node = next;
-    });
-    return node;
+    if (!routerViewNode) {
+      const { component, params, path } = findRoute(pathState.value);
+      routerViewNode = component ? jsx(component, { ...contextState.value, params }, path) : document.createTextNode('Not Found');
+    }
+    return routerViewNode;
   };
 
   const push = (p: string) => navigate(p);
@@ -192,15 +211,23 @@ export function createRouter(config: RouterConfig) {
     } else {
       location.hash = p;
     }
-    setPath(p);
-    setContext({
-      path: p,
-      params: findRoute(p).params,
-      query: parseQuery(p.split('?')[1] || '')
+    setState(() => {
+      pathState.value = p;
+      contextState.value = {
+        path: p,
+        params: findRoute(p).params,
+        query: parseQuery(p.split('?')[1] || '')
+      };
     });
   };
 
-  return { RouterView, push, replace, path, context };
+  return { 
+    RouterView, 
+    push, 
+    replace, 
+    path: () => pathState.value, 
+    context: () => contextState.value 
+  };
 }
 
 

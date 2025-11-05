@@ -15,7 +15,7 @@ export type EffectRunner = EffectFn & {
 };
 
 
-export type ComputedFn<T> = () => T;
+export type ComputedFn<T> = () => T | Promise<T>;
 export type Computed<T> = (() => T) & { _isComputed?: boolean };
 
 

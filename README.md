@@ -18,15 +18,15 @@ npm install drift-spa
 ```
 
 ```tsx
-import { createSignal, createApp, type FC } from 'drift-spa';
+import { state, setState, createApp, type FC } from 'drift-spa';
 
 const Counter: FC = () => {
-  const [count, setCount] = createSignal(0);
+  let count = state(0);
   
   return (
     <div>
-      <p>Count: {() => count()}</p>
-      <button onClick={() => setCount(c => c + 1)}>+</button>
+      <p>Count: {() => count.value}</p>
+      <button onClick={() => setState(() => { count.value++; })}>+</button>
     </div>
   );
 };
@@ -38,18 +38,33 @@ createApp(Counter).mount('#app');
 
 ### Reactivity
 
-#### `createSignal<T>(initial: T, name?: string)`
-Creates a reactive signal.
+#### `state<T>(initial: T, name?: string)`
+Creates a reactive state variable.
 
 ```tsx
-const [count, setCount] = createSignal(0, 'counter');
+let count = state(0, 'counter');
 ```
 
-#### `createComputed<T>(fn: () => T)`
-Creates a computed value.
+#### `setState(fn: () => void)`
+Updates state variables in a batch.
 
 ```tsx
-const doubleCount = createComputed(() => count() * 2);
+setState(() => {
+  count.value = 5;
+  user.name = 'John';
+});
+```
+
+#### `computed<T>(fn: () => T | Promise<T>)`
+Creates a computed value that can be synchronous or asynchronous.
+
+```tsx
+const doubleCount = computed(() => count.value * 2);
+
+const asyncData = computed(async () => {
+  const response = await fetch('/api/data');
+  return response.json();
+});
 ```
 
 #### `effect(fn: () => void)`
@@ -151,18 +166,18 @@ Hotkeys: `Ctrl+Shift+D`
 ### Simple Counter
 
 ```tsx
-import { createSignal, createComputed, createApp, type FC } from 'drift-spa';
+import { state, setState, computed, createApp, type FC } from 'drift-spa';
 
 const Counter: FC = () => {
-  const [count, setCount] = createSignal(0);
-  const doubleCount = createComputed(() => count() * 2);
+  let count = state(0);
+  const doubleCount = computed(() => count.value * 2);
   
   return (
     <div>
-      <h1>Counter: {() => count()}</h1>
+      <h1>Counter: {() => count.value}</h1>
       <p>Double: {() => doubleCount()}</p>
-      <button onClick={() => setCount(c => c + 1)}>+</button>
-      <button onClick={() => setCount(0)}>Reset</button>
+      <button onClick={() => setState(() => { count.value++; })}>+</button>
+      <button onClick={() => setState(() => { count.value = 0; })}>Reset</button>
     </div>
   );
 };
@@ -173,18 +188,22 @@ createApp(Counter).mount('#app');
 ### Routing with Parameters
 
 ```tsx
-import { createRouter, createSignal, type FC } from 'drift-spa';
+import { createRouter, state, setState, effect, type FC } from 'drift-spa';
 
 const UserPage: FC<{ params: { id: string } }> = ({ params }) => {
-  const [user, setUser] = createSignal(null);
+  let user = state<any>(null);
   
   effect(() => {
-    fetchUser(params.id).then(setUser);
+    fetchUser(params.id).then((data) => {
+      setState(() => {
+        user.value = data;
+      });
+    });
   });
   
   return (
     <div>
-      <h1>User: {() => user()?.name}</h1>
+      <h1>User: {() => user.value?.name}</h1>
       <p>ID: {params.id}</p>
     </div>
   );
