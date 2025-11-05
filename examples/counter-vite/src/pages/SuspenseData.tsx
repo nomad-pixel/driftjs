@@ -1,4 +1,4 @@
-import { Suspense, createResource, state, setState, type FC } from 'drift-spa';
+import { Suspense, createResource, state, setState, effect, type FC } from 'drift-spa';
 
 interface User {
   id: number;
@@ -8,7 +8,6 @@ interface User {
 }
 
 const fetchUser = async (id: number): Promise<User> => {
-  // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 1500));
   
   const response = await fetch(`https://jsonplaceholder.typicode.com/users/${id}`);
@@ -87,8 +86,12 @@ export const SuspenseDataPage: FC = () => {
   };
   
   const currentUserId = document.createElement('span');
-  currentUserId.textContent = () => `User ID: ${userId.value}`;
+  currentUserId.textContent = `User ID: ${userId.value}`;
   currentUserId.style.cssText = 'padding: 10px 16px; background: #f3f4f6; border-radius: 6px; font-weight: 600;';
+  
+  effect(() => {
+    currentUserId.textContent = `User ID: ${userId.value}`;
+  });
   
   controls.appendChild(prevButton);
   controls.appendChild(currentUserId);
@@ -139,7 +142,6 @@ export const SuspenseDataPage: FC = () => {
   
   renderContent();
   
-  // Watch for changes
   let prevKey = key.value;
   setInterval(() => {
     if (prevKey !== key.value) {
