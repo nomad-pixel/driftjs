@@ -2,6 +2,7 @@ import { normalizeChild, setProp, Child } from './dom';
 import { effect, setComponentContext, getComponentContext, getComponentEffectIndex, getComponentInstanceKey, cleanupComponentState } from './reactivity';
 import { cleanupContext } from './context';
 import { cleanupScopedServices } from './di';
+import { getCurrentErrorBoundary } from './error-boundary';
 
 export type Component<P = {}> = (props: P & { children?: any; key?: any }) => Node;
 
@@ -154,6 +155,17 @@ export function jsx(type: any, props: Record<string, any>, key?: any): Node {
         (result as any).__instanceKey = instanceKey;
       }
       return result;
+    } catch (error) {
+      const errorBoundary = getCurrentErrorBoundary();
+      if (errorBoundary) {
+        errorBoundary.catchError(
+          error as Error, 
+          `in component ${type.name || 'Anonymous'}`
+        );
+        return document.createTextNode('');
+      } else {
+        throw error;
+      }
     } finally {
       setComponentContext(prevContext, prevEffectIndex, prevInstanceKey);
     }

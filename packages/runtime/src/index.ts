@@ -68,6 +68,15 @@ export {
   clearCaches
 } from './performance';
 
+export {
+  ErrorBoundary,
+  wrapWithErrorHandling,
+  useErrorHandler,
+  captureError,
+  type ErrorInfo,
+  type ErrorBoundaryProps
+} from './error-boundary';
+
 export { devtools } from './devtools';
 
 export type {

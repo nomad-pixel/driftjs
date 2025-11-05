@@ -12,6 +12,9 @@ import {
   createProvider,
   provide,
   inject,
+  ErrorBoundary,
+  useErrorHandler,
+  captureError,
   type FC, 
 } from 'drift-spa';
 
@@ -560,6 +563,137 @@ const ApiServiceExample: FC = () => {
   );
 };
 
+const BuggyComponent: FC = () => {
+  let count = state(0);
+  
+  if (count.value > 3) {
+    throw new Error('Count is too high!');
+  }
+  
+  return (
+    <div style={{ padding: '1rem' }}>
+      <h2>Buggy Component</h2>
+      <p>Count: {() => count.value}</p>
+      <p>This component will throw an error when count &gt; 3</p>
+      <button onClick={() => setState(() => { count.value++; })}>
+        Increment (will crash at 4)
+      </button>
+    </div>
+  );
+};
+
+const ErrorBoundaryExample: FC = () => {
+  let resetKey = state(0);
+  
+  return (
+    <div style={{ padding: '1rem' }}>
+      <h1>Error Boundary Example</h1>
+      
+      <div style={{ marginBottom: '1rem' }}>
+        <button onClick={() => setState(() => { resetKey.value++; })}>
+          Reset Error Boundary (key: {() => resetKey.value})
+        </button>
+      </div>
+      
+      <ErrorBoundary
+        resetKeys={[() => resetKey.value]}
+        onError={(error, errorInfo) => {
+          console.log('ErrorBoundary caught error:', error);
+          console.log('Error info:', errorInfo);
+        }}
+        onReset={() => {
+          console.log('ErrorBoundary was reset');
+        }}
+      >
+        {BuggyComponent({})}
+      </ErrorBoundary>
+    </div>
+  );
+};
+
+const CustomFallbackExample: FC = () => {
+  return (
+    <div style={{ padding: '1rem' }}>
+      <h1>Custom Fallback Example</h1>
+      
+      <ErrorBoundary
+        fallback={(error, errorInfo, reset) => {
+          const container = document.createElement('div');
+          container.style.cssText = 'padding: 20px; background: #fef2f2; border: 2px solid #fca5a5; border-radius: 8px;';
+          
+          const title = document.createElement('h3');
+          title.textContent = '🚨 Custom Error UI';
+          title.style.color = '#dc2626';
+          
+          const message = document.createElement('p');
+          message.textContent = `Error: ${error.message}`;
+          
+          const button = document.createElement('button');
+          button.textContent = 'Recover';
+          button.style.cssText = 'padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer;';
+          button.onclick = reset;
+          
+          container.appendChild(title);
+          container.appendChild(message);
+          container.appendChild(button);
+          
+          return container;
+        }}
+      >
+        {BuggyComponent({})}
+      </ErrorBoundary>
+    </div>
+  );
+};
+
+const AsyncErrorComponent: FC = () => {
+  const throwAsync = async () => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    throw new Error('Async operation failed!');
+  };
+  
+  return (
+    <div style={{ padding: '1rem' }}>
+      <h2>Async Error Component</h2>
+      <button onClick={() => {
+        throwAsync().catch(error => {
+          captureError(error, 'in async operation');
+        });
+      }}>
+        Trigger Async Error
+      </button>
+    </div>
+  );
+};
+
+const NestedErrorBoundaries: FC = () => {
+  return (
+    <div style={{ padding: '1rem' }}>
+      <h1>Nested Error Boundaries</h1>
+      
+      <ErrorBoundary>
+        <div style={{ background: '#f0f0f0', padding: '1rem', marginBottom: '1rem' }}>
+          <h2>Outer Boundary</h2>
+          <p>This content is safe</p>
+          
+          <ErrorBoundary>
+            <div style={{ background: '#e0e0e0', padding: '1rem' }}>
+              <h3>Inner Boundary</h3>
+              {BuggyComponent({})}
+            </div>
+          </ErrorBoundary>
+          
+          <p style={{ marginTop: '1rem' }}>This content is still visible even if inner component crashes</p>
+        </div>
+      </ErrorBoundary>
+      
+      <ErrorBoundary>
+        {AsyncErrorComponent({})}
+      </ErrorBoundary>
+    </div>
+  );
+};
+
 provide(LoggerService);
 provide(ThemeService);
 provide(ApiService);
@@ -576,6 +710,9 @@ const { RouterView, push } = createRouter({
     '/di': DIExample,
     '/services': DIServiceExample,
     '/api-service': ApiServiceExample,
+    '/error-boundary': ErrorBoundaryExample,
+    '/custom-fallback': CustomFallbackExample,
+    '/nested-errors': NestedErrorBoundaries,
     '/test': TestPage,
     '*': () => <div>404</div>
   }
@@ -592,9 +729,14 @@ const App: FC = () => (
       <a href="/di" onClick={(e) => { e.preventDefault(); push('/di'); }}>DI Old</a>
       <a href="/services" onClick={(e) => { e.preventDefault(); push('/services'); }}>Services</a>
       <a href="/api-service" onClick={(e) => { e.preventDefault(); push('/api-service'); }}>API</a>
+      <a href="/error-boundary" onClick={(e) => { e.preventDefault(); push('/error-boundary'); }}>Errors</a>
+      <a href="/custom-fallback" onClick={(e) => { e.preventDefault(); push('/custom-fallback'); }}>Custom</a>
+      <a href="/nested-errors" onClick={(e) => { e.preventDefault(); push('/nested-errors'); }}>Nested</a>
       <a href="/test" onClick={(e) => { e.preventDefault(); push('/test'); }}>Test</a>
     </nav>
-    <RouterView />
+    <ErrorBoundary>
+      <RouterView />
+    </ErrorBoundary>
   </div>
 );
 
