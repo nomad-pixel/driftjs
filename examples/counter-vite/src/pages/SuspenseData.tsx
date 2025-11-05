@@ -21,25 +21,32 @@ const UserCard: FC<{ userId: number }> = (props) => {
   const container = document.createElement('div');
   container.style.cssText = 'padding: 1.5rem; background: white; border: 2px solid #e5e7eb; border-radius: 8px; margin-top: 1rem;';
   
-  const user = userResource();
-  
-  if (user) {
-    const name = document.createElement('h3');
-    name.textContent = user.name;
-    name.style.cssText = 'margin: 0 0 8px 0; color: #1f2937;';
+  effect(() => {
+    const user = userResource();
     
-    const username = document.createElement('p');
-    username.textContent = `@${user.username}`;
-    username.style.cssText = 'margin: 0 0 8px 0; color: #6b7280; font-style: italic;';
+    // Clear previous content
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
     
-    const email = document.createElement('p');
-    email.textContent = `📧 ${user.email}`;
-    email.style.cssText = 'margin: 0; color: #4b5563;';
-    
-    container.appendChild(name);
-    container.appendChild(username);
-    container.appendChild(email);
-  }
+    if (user) {
+      const name = document.createElement('h3');
+      name.textContent = user.name;
+      name.style.cssText = 'margin: 0 0 8px 0; color: #1f2937;';
+      
+      const username = document.createElement('p');
+      username.textContent = `@${user.username}`;
+      username.style.cssText = 'margin: 0 0 8px 0; color: #6b7280; font-style: italic;';
+      
+      const email = document.createElement('p');
+      email.textContent = `📧 ${user.email}`;
+      email.style.cssText = 'margin: 0; color: #4b5563;';
+      
+      container.appendChild(name);
+      container.appendChild(username);
+      container.appendChild(email);
+    }
+  });
   
   return container;
 };
