@@ -710,6 +710,12 @@ export function computed<T>(fn: ComputedFn<T>, name?: string) {
         
         closure.currentPromise = result;
         
+        // Notify Suspense if we're inside one
+        const suspenseContext = (globalThis as any).__DRIFT_SUSPENSE_CONTEXT__;
+        if (suspenseContext) {
+          suspenseContext.addPromise(result);
+        }
+        
         if (hasValue || hasPreviousValue) {
           closure.isPending = true;
         } else {

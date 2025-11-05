@@ -60,7 +60,6 @@ export {
 export {
   memo,
   VirtualList,
-  lazy,
   debounce,
   throttle,
   useIntersectionObserver,
@@ -83,6 +82,16 @@ export {
   removePortal,
   type PortalProps
 } from './portal';
+
+export {
+  Suspense,
+  lazy,
+  createResource,
+  useSuspensePromise,
+  SuspenseList,
+  getCurrentSuspense,
+  type SuspenseProps
+} from './suspense';
 
 export { devtools } from './devtools';
 

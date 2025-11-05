@@ -6,6 +6,36 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Added
 
+#### **Suspense for Async Operations** ⏳
+Declarative loading states for async components and data fetching
+- `<Suspense>` component with customizable fallback UI
+- **lazy() API:**
+  - Code splitting for components
+  - Automatic bundle splitting
+  - Integration with build tools
+- **createResource() API:**
+  - Declarative data fetching
+  - Automatic loading state management
+  - Promise coordination
+- **useSuspensePromise()** - manual promise registration
+- **SuspenseList** - coordinate multiple Suspense boundaries (experimental)
+- **Features:**
+  - Automatic promise tracking
+  - Nested Suspense boundaries for granular loading
+  - Default animated fallback UI (spinner)
+  - Custom fallback support
+  - onResolve / onError callbacks
+  - Integration with async computed values
+  - Works with ErrorBoundary for error handling
+- Full integration with reactivity system
+- Type-safe API
+- Comprehensive documentation (`docs/SUSPENSE.md`)
+- Examples:
+  - Lazy loading components with code splitting
+  - Data fetching with createResource
+  - Nested Suspense boundaries
+  - Parallel data loading
+
 #### **Error Boundaries** 🛡️
 Полноценная система отлова и обработки ошибок в компонентах
 - `<ErrorBoundary>` компонент для отлова ошибок в дереве компонентов

@@ -27,6 +27,9 @@ import { PortalModal } from './pages/PortalModal';
 import { PortalTooltip } from './pages/PortalTooltip';
 import { PortalNotifications } from './pages/PortalNotifications';
 import { PortalFunction } from './pages/PortalFunction';
+import { SuspenseLazyPage } from './pages/SuspenseLazy';
+import { SuspenseDataPage } from './pages/SuspenseData';
+import { SuspenseNestedPage } from './pages/SuspenseNested';
 
 provide(LoggerService);
 provide(ThemeService);
@@ -51,6 +54,9 @@ const { RouterView, push } = createRouter({
     '/portal-tooltip': PortalTooltip,
     '/portal-notifications': PortalNotifications,
     '/portal-function': PortalFunction,
+    '/suspense-lazy': SuspenseLazyPage,
+    '/suspense-data': SuspenseDataPage,
+    '/suspense-nested': SuspenseNestedPage,
     '/test': Test,
     '*': () => <div>404</div>
   }
@@ -74,6 +80,9 @@ const App: FC = () => (
       <a href="/portal-tooltip" onClick={(e) => { e.preventDefault(); push('/portal-tooltip'); }}>Tooltip</a>
       <a href="/portal-notifications" onClick={(e) => { e.preventDefault(); push('/portal-notifications'); }}>Notify</a>
       <a href="/portal-function" onClick={(e) => { e.preventDefault(); push('/portal-function'); }}>Portal Fn</a>
+      <a href="/suspense-lazy" onClick={(e) => { e.preventDefault(); push('/suspense-lazy'); }}>Lazy</a>
+      <a href="/suspense-data" onClick={(e) => { e.preventDefault(); push('/suspense-data'); }}>Data</a>
+      <a href="/suspense-nested" onClick={(e) => { e.preventDefault(); push('/suspense-nested'); }}>Nested</a>
       <a href="/test" onClick={(e) => { e.preventDefault(); push('/test'); }}>Test</a>
     </nav>
     <ErrorBoundary>
