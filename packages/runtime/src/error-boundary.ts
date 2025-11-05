@@ -1,65 +1,113 @@
-import { state, setState, effect } from './reactivity';
-import type { FC } from './jsx-runtime';
+import { state, effect, setState } from './reactivity';
+import { getComponentInstanceKey } from './reactivity';
 
 export interface ErrorInfo {
   componentStack?: string;
-  error: Error;
-  timestamp: Date;
+  errorBoundary?: string;
 }
 
 export interface ErrorBoundaryProps {
-  fallback?: ((error: Error, errorInfo: ErrorInfo, reset: () => void) => Node) | Node;
+  children?: any;
+  fallback?: (error: Error, errorInfo: ErrorInfo, reset: () => void) => Node;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   onReset?: () => void;
-  resetKeys?: any[];
-  children: any;
+  resetKeys?: Array<() => any>;
 }
 
-interface ErrorState {
+type ErrorBoundaryState = {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+};
+
+interface ErrorBoundaryHandler {
+  catchError: (error: Error, context?: string) => void;
+  name: string;
 }
 
-const ERROR_BOUNDARY_CONTEXTS = new WeakMap<Node, ErrorBoundaryContext>();
+const errorBoundaryStack: ErrorBoundaryHandler[] = [];
 
-interface ErrorBoundaryContext {
-  catchError: (error: Error, componentStack?: string) => void;
-  reset: () => void;
+function pushErrorBoundary(handler: ErrorBoundaryHandler) {
+  errorBoundaryStack.push(handler);
 }
 
-export function getErrorBoundaryContext(node: Node): ErrorBoundaryContext | null {
-  let current: Node | null = node;
-  while (current) {
-    const context = ERROR_BOUNDARY_CONTEXTS.get(current);
-    if (context) return context;
-    current = current.parentNode;
+function popErrorBoundary() {
+  errorBoundaryStack.pop();
+}
+
+export function getCurrentErrorBoundary(): ErrorBoundaryHandler | null {
+  return errorBoundaryStack[errorBoundaryStack.length - 1] || null;
+}
+
+export function captureError(error: Error, context?: string) {
+  const currentBoundary = getCurrentErrorBoundary();
+  if (currentBoundary) {
+    currentBoundary.catchError(error, context);
+  } else {
+    console.error('Uncaught error (no error boundary):', error);
+    throw error;
   }
-  return null;
 }
 
-let CURRENT_ERROR_BOUNDARY: ErrorBoundaryContext | null = null;
-
-export function setCurrentErrorBoundary(context: ErrorBoundaryContext | null) {
-  CURRENT_ERROR_BOUNDARY = context;
+export function useErrorHandler() {
+  return (error: Error, context?: string) => {
+    captureError(error, context);
+  };
 }
 
-export function getCurrentErrorBoundary(): ErrorBoundaryContext | null {
-  return CURRENT_ERROR_BOUNDARY;
+function createDefaultFallback(error: Error, errorInfo: ErrorInfo, reset: () => void): Node {
+  const container = document.createElement('div');
+  container.style.cssText = 'padding: 20px; margin: 20px 0; background: #fee; border: 2px solid #fcc; border-radius: 8px; font-family: system-ui, -apple-system, sans-serif;';
+  
+  const title = document.createElement('h3');
+  title.textContent = '⚠️ Something went wrong';
+  title.style.cssText = 'margin: 0 0 10px 0; color: #c00;';
+  
+  const message = document.createElement('p');
+  message.textContent = error.message;
+  message.style.cssText = 'margin: 0 0 10px 0; color: #666;';
+  
+  const stack = document.createElement('details');
+  stack.style.cssText = 'margin: 10px 0; padding: 10px; background: #fff; border-radius: 4px;';
+  
+  const summary = document.createElement('summary');
+  summary.textContent = 'Error details';
+  summary.style.cssText = 'cursor: pointer; font-weight: 600; color: #c00;';
+  
+  const stackTrace = document.createElement('pre');
+  stackTrace.textContent = error.stack || 'No stack trace available';
+  stackTrace.style.cssText = 'margin: 10px 0 0 0; padding: 10px; background: #f5f5f5; border-radius: 4px; overflow: auto; font-size: 12px;';
+  
+  stack.appendChild(summary);
+  stack.appendChild(stackTrace);
+  
+  const button = document.createElement('button');
+  button.textContent = 'Try again';
+  button.style.cssText = 'padding: 8px 16px; background: #c00; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;';
+  button.onmouseover = () => { button.style.background = '#a00'; };
+  button.onmouseout = () => { button.style.background = '#c00'; };
+  button.onclick = reset;
+  
+  container.appendChild(title);
+  container.appendChild(message);
+  container.appendChild(stack);
+  container.appendChild(button);
+  
+  return container;
 }
 
-export const ErrorBoundary: FC<ErrorBoundaryProps> = (props) => {
-  const errorState = state<ErrorState>({
+export function ErrorBoundary(props: ErrorBoundaryProps): Node {
+  const instanceKey = getComponentInstanceKey() || 'ErrorBoundary';
+  
+  const errorState = state<ErrorBoundaryState>({
     hasError: false,
     error: null,
     errorInfo: null
   });
-
-  let contentNode: Node | null = null;
-  let fallbackNode: Node | null = null;
+  
   const container = document.createElement('div');
-  container.setAttribute('data-error-boundary', 'true');
-
+  container.setAttribute('data-error-boundary', instanceKey);
+  
   const reset = () => {
     setState(() => {
       errorState.value = {
@@ -69,25 +117,17 @@ export const ErrorBoundary: FC<ErrorBoundaryProps> = (props) => {
       };
     });
     
-    props.onReset?.();
-    
-    if (fallbackNode && fallbackNode.parentNode === container) {
-      container.removeChild(fallbackNode);
-      fallbackNode = null;
-    }
-    
-    if (contentNode) {
-      container.appendChild(contentNode);
+    if (props.onReset) {
+      props.onReset();
     }
   };
-
-  const catchError = (error: Error, componentStack?: string) => {
+  
+  const handleError = (error: Error, context?: string) => {
     const errorInfo: ErrorInfo = {
-      error,
-      componentStack,
-      timestamp: new Date()
+      componentStack: context,
+      errorBoundary: instanceKey
     };
-
+    
     setState(() => {
       errorState.value = {
         hasError: true,
@@ -95,235 +135,119 @@ export const ErrorBoundary: FC<ErrorBoundaryProps> = (props) => {
         errorInfo
       };
     });
-
-    props.onError?.(error, errorInfo);
-
-    console.error('[ErrorBoundary] Caught error:', error);
-    if (componentStack) {
-      console.error('[ErrorBoundary] Component stack:', componentStack);
+    
+    if (props.onError) {
+      props.onError(error, errorInfo);
     }
   };
-
-  const context: ErrorBoundaryContext = {
-    catchError,
-    reset
+  
+  const errorBoundaryHandler: ErrorBoundaryHandler = {
+    catchError: handleError,
+    name: instanceKey
   };
-
-  ERROR_BOUNDARY_CONTEXTS.set(container, context);
-
-  if (props.resetKeys && props.resetKeys.length > 0) {
-    let prevKeys = [...props.resetKeys];
-    effect(() => {
-      const currentKeys = props.resetKeys || [];
-      const keysChanged = prevKeys.length !== currentKeys.length ||
-        prevKeys.some((key, i) => !Object.is(key, currentKeys[i]));
-      
-      if (keysChanged && errorState.value.hasError) {
-        reset();
+  
+  pushErrorBoundary(errorBoundaryHandler);
+  
+  const initialChildren = props.children;
+  
+  try {
+    if (initialChildren) {
+      if (Array.isArray(initialChildren)) {
+        initialChildren.forEach(child => {
+          if (child instanceof Node) {
+            container.appendChild(child);
+          } else if (child != null && child !== false) {
+            container.appendChild(document.createTextNode(String(child)));
+          }
+        });
+      } else if (initialChildren instanceof Node) {
+        container.appendChild(initialChildren);
+      } else if (initialChildren != null && initialChildren !== false) {
+        container.appendChild(document.createTextNode(String(initialChildren)));
       }
-      prevKeys = [...currentKeys];
+    }
+  } catch (error) {
+    handleError(error as Error, 'ErrorBoundary initial render');
+  }
+  
+  effect(() => {
+    return () => {
+      popErrorBoundary();
+    };
+  });
+  
+  if (props.resetKeys && props.resetKeys.length > 0) {
+    const previousKeys = props.resetKeys.map(fn => fn());
+    
+    effect(() => {
+      const currentKeys = props.resetKeys!.map(fn => fn());
+      
+      const hasChanged = currentKeys.some((key, index) => key !== previousKeys[index]);
+      
+      if (hasChanged && errorState.value.hasError) {
+        reset();
+        previousKeys.length = 0;
+        previousKeys.push(...currentKeys);
+      }
     });
   }
-
+  
   effect(() => {
-    if (errorState.value.hasError) {
-      if (contentNode && contentNode.parentNode === container) {
-        container.removeChild(contentNode);
+    if (errorState.value.hasError && errorState.value.error && errorState.value.errorInfo) {
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
       }
-
-      const error = errorState.value.error!;
-      const errorInfo = errorState.value.errorInfo!;
-
-      if (typeof props.fallback === 'function') {
-        fallbackNode = props.fallback(error, errorInfo, reset);
-      } else if (props.fallback) {
-        fallbackNode = props.fallback;
-      } else {
-        fallbackNode = createDefaultFallback(error, errorInfo, reset);
-      }
-
+      
+      const fallbackNode = props.fallback
+        ? props.fallback(errorState.value.error, errorState.value.errorInfo, reset)
+        : createDefaultFallback(errorState.value.error, errorState.value.errorInfo, reset);
+      
       container.appendChild(fallbackNode);
-    } else {
-      if (fallbackNode && fallbackNode.parentNode === container) {
-        container.removeChild(fallbackNode);
-        fallbackNode = null;
-      }
-
-      const prevBoundary = CURRENT_ERROR_BOUNDARY;
-      CURRENT_ERROR_BOUNDARY = context;
-
+    } else if (errorState.value.hasError === false && container.childNodes.length === 0) {
       try {
-        const children = typeof props.children === 'function' 
-          ? props.children() 
-          : props.children;
-
-        if (children instanceof Node) {
-          contentNode = children;
-        } else if (Array.isArray(children)) {
-          const fragment = document.createDocumentFragment();
-          children.forEach(child => {
-            if (child instanceof Node) {
-              fragment.appendChild(child);
-            } else if (child != null && child !== false) {
-              fragment.appendChild(document.createTextNode(String(child)));
-            }
-          });
-          contentNode = fragment;
-        } else if (children != null && children !== false) {
-          contentNode = document.createTextNode(String(children));
-        } else {
-          contentNode = document.createTextNode('');
-        }
-
-        if (contentNode && !contentNode.parentNode) {
-          container.appendChild(contentNode);
+        if (initialChildren) {
+          if (Array.isArray(initialChildren)) {
+            initialChildren.forEach(child => {
+              if (child instanceof Node && !child.parentNode) {
+                container.appendChild(child);
+              } else if (child instanceof Node) {
+                container.appendChild(child.cloneNode(true));
+              } else if (child != null && child !== false) {
+                container.appendChild(document.createTextNode(String(child)));
+              }
+            });
+          } else if (initialChildren instanceof Node && !initialChildren.parentNode) {
+            container.appendChild(initialChildren);
+          } else if (initialChildren instanceof Node) {
+            container.appendChild(initialChildren.cloneNode(true));
+          } else if (initialChildren != null && initialChildren !== false) {
+            container.appendChild(document.createTextNode(String(initialChildren)));
+          }
         }
       } catch (error) {
-        catchError(error as Error, 'Error rendering children');
-      } finally {
-        CURRENT_ERROR_BOUNDARY = prevBoundary;
+        handleError(error as Error, 'ErrorBoundary render after reset');
       }
     }
   });
-
-  return container;
-};
-
-function createDefaultFallback(error: Error, errorInfo: ErrorInfo, reset: () => void): Node {
-  const container = document.createElement('div');
-  container.style.cssText = `
-    padding: 20px;
-    margin: 20px;
-    border: 2px solid #ef4444;
-    border-radius: 8px;
-    background: #fee;
-    font-family: system-ui, -apple-system, sans-serif;
-  `;
-
-  const title = document.createElement('h2');
-  title.textContent = '⚠️ Something went wrong';
-  title.style.cssText = 'margin: 0 0 12px 0; color: #dc2626; font-size: 20px;';
-
-  const message = document.createElement('p');
-  message.textContent = error.message;
-  message.style.cssText = 'margin: 0 0 12px 0; color: #991b1b; font-size: 14px;';
-
-  const details = document.createElement('details');
-  details.style.cssText = 'margin: 12px 0; color: #7f1d1d; font-size: 12px;';
-
-  const summary = document.createElement('summary');
-  summary.textContent = 'Error details';
-  summary.style.cssText = 'cursor: pointer; font-weight: 600; margin-bottom: 8px;';
-
-  const stack = document.createElement('pre');
-  stack.textContent = error.stack || 'No stack trace available';
-  stack.style.cssText = `
-    margin: 8px 0;
-    padding: 12px;
-    background: #fff;
-    border: 1px solid #fca5a5;
-    border-radius: 4px;
-    overflow-x: auto;
-    font-size: 11px;
-    line-height: 1.5;
-  `;
-
-  details.appendChild(summary);
-  details.appendChild(stack);
-
-  if (errorInfo.componentStack) {
-    const componentStack = document.createElement('pre');
-    componentStack.textContent = errorInfo.componentStack;
-    componentStack.style.cssText = stack.style.cssText;
-    
-    const componentLabel = document.createElement('div');
-    componentLabel.textContent = 'Component Stack:';
-    componentLabel.style.cssText = 'font-weight: 600; margin-top: 8px;';
-    
-    details.appendChild(componentLabel);
-    details.appendChild(componentStack);
-  }
-
-  const resetButton = document.createElement('button');
-  resetButton.textContent = '🔄 Try Again';
-  resetButton.style.cssText = `
-    padding: 8px 16px;
-    background: #dc2626;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-  `;
-  resetButton.onmouseover = () => {
-    resetButton.style.background = '#b91c1c';
-  };
-  resetButton.onmouseout = () => {
-    resetButton.style.background = '#dc2626';
-  };
-  resetButton.onclick = () => reset();
-
-  container.appendChild(title);
-  container.appendChild(message);
-  container.appendChild(details);
-  container.appendChild(resetButton);
-
+  
   return container;
 }
 
-export function wrapWithErrorHandling<T extends (...args: any[]) => any>(
-  fn: T,
-  componentName?: string
-): T {
-  return ((...args: any[]) => {
-    try {
-      const result = fn(...args);
-      
-      if (result instanceof Promise) {
-        return result.catch((error: Error) => {
-          const boundary = getCurrentErrorBoundary();
-          if (boundary) {
-            boundary.catchError(error, componentName ? `in ${componentName}` : undefined);
-          } else {
-            console.error('Uncaught error (no error boundary):', error);
-            throw error;
-          }
-        });
-      }
-      
-      return result;
-    } catch (error) {
-      const boundary = getCurrentErrorBoundary();
-      if (boundary) {
-        boundary.catchError(error as Error, componentName ? `in ${componentName}` : undefined);
-        return null;
-      } else {
-        throw error;
-      }
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    const currentBoundary = getCurrentErrorBoundary();
+    if (currentBoundary) {
+      event.preventDefault();
+      captureError(event.error || new Error(event.message), `at ${event.filename}:${event.lineno}:${event.colno}`);
     }
-  }) as T;
-}
-
-export function useErrorHandler() {
-  return (error: Error, componentStack?: string) => {
-    const boundary = getCurrentErrorBoundary();
-    if (boundary) {
-      boundary.catchError(error, componentStack);
-    } else {
-      console.error('No error boundary found');
-      throw error;
+  });
+  
+  window.addEventListener('unhandledrejection', (event) => {
+    const currentBoundary = getCurrentErrorBoundary();
+    if (currentBoundary) {
+      event.preventDefault();
+      const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+      captureError(error, 'unhandled promise rejection');
     }
-  };
+  });
 }
-
-export function captureError(error: Error, componentStack?: string): void {
-  const boundary = getCurrentErrorBoundary();
-  if (boundary) {
-    boundary.catchError(error, componentStack);
-  } else {
-    console.error('[ErrorBoundary] No error boundary found, rethrowing error');
-    throw error;
-  }
-}
-

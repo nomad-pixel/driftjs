@@ -9,11 +9,9 @@ import {
   createContext,
   provideContext,
   injectContext,
-  createProvider,
   provide,
   inject,
   ErrorBoundary,
-  useErrorHandler,
   captureError,
   type FC, 
 } from 'drift-spa';
@@ -566,17 +564,29 @@ const ApiServiceExample: FC = () => {
 const BuggyComponent: FC = () => {
   let count = state(0);
   
-  if (count.value > 3) {
-    throw new Error('Count is too high!');
-  }
+  const handleIncrement = () => {
+    try {
+      const newValue = count.value + 1;
+      
+      if (newValue > 3) {
+        throw new Error(`Count is too high! (${newValue})`);
+      }
+      
+      setState(() => { count.value = newValue; });
+    } catch (error) {
+      captureError(error as Error, 'BuggyComponent handleIncrement');
+    }
+  };
   
   return (
     <div style={{ padding: '1rem' }}>
       <h2>Buggy Component</h2>
       <p>Count: {() => count.value}</p>
-      <p>This component will throw an error when count &gt; 3</p>
-      <button onClick={() => setState(() => { count.value++; })}>
-        Increment (will crash at 4)
+      <p style={() => ({ color: count.value > 2 ? '#dc2626' : '#666' })}>
+        This component will throw an error when count &gt; 3
+      </p>
+      <button onClick={handleIncrement}>
+        Increment {() => count.value > 2 ? '(⚠️ will crash soon!)' : ''}
       </button>
     </div>
   );
@@ -605,7 +615,7 @@ const ErrorBoundaryExample: FC = () => {
           console.log('ErrorBoundary was reset');
         }}
       >
-        {BuggyComponent({})}
+        <BuggyComponent />
       </ErrorBoundary>
     </div>
   );
@@ -735,7 +745,7 @@ const App: FC = () => (
       <a href="/test" onClick={(e) => { e.preventDefault(); push('/test'); }}>Test</a>
     </nav>
     <ErrorBoundary>
-      <RouterView />
+    <RouterView />
     </ErrorBoundary>
   </div>
 );

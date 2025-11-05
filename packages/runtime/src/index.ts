@@ -70,7 +70,6 @@ export {
 
 export {
   ErrorBoundary,
-  wrapWithErrorHandling,
   useErrorHandler,
   captureError,
   type ErrorInfo,

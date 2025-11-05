@@ -1,229 +1,128 @@
 # Error Boundaries
 
-Error Boundaries в Drift — это компоненты, которые отлавливают JavaScript-ошибки в любой части дерева компонентов, логируют их и отображают fallback UI вместо упавшего дерева компонентов.
+Error Boundaries provide a way to gracefully handle JavaScript errors in your Drift application, preventing the entire app from crashing when an error occurs in a component.
 
-## 🎯 Зачем нужны Error Boundaries
+## Basic Usage
 
-- **Предотвращение полного краха приложения** — одна ошибка не уронит всё приложение
-- **Graceful degradation** — показ fallback UI вместо пустого экрана
-- **Логирование ошибок** — централизованная обработка ошибок
-- **Улучшение UX** — пользователь видит понятное сообщение об ошибке
-
-## 📚 API Reference
-
-### `<ErrorBoundary>`
-
-Компонент для отлова ошибок в дереве компонентов.
-
-#### Props
+Wrap any part of your component tree with an `ErrorBoundary`:
 
 ```typescript
-interface ErrorBoundaryProps {
-  // Fallback UI - может быть функцией или Node
-  fallback?: ((error: Error, errorInfo: ErrorInfo, reset: () => void) => Node) | Node;
-  
-  // Callback при возникновении ошибки
-  onError?: (error: Error, errorInfo: ErrorInfo) => void;
-  
-  // Callback при сбросе ErrorBoundary
-  onReset?: () => void;
-  
-  // Массив зависимостей для автоматического сброса
-  resetKeys?: any[];
-  
-  // Дочерние компоненты
-  children: any;
-}
+import { ErrorBoundary } from 'drift-spa';
 
-interface ErrorInfo {
-  error: Error;
-  componentStack?: string;
-  timestamp: Date;
-}
-```
-
----
-
-### `captureError(error, componentStack?)`
-
-Программно отправляет ошибку в ближайший ErrorBoundary.
-
-```typescript
-captureError(new Error('Something went wrong'), 'in MyComponent');
-```
-
----
-
-### `useErrorHandler()`
-
-Возвращает функцию для отправки ошибок в ErrorBoundary.
-
-```typescript
-const handleError = useErrorHandler();
-
-try {
-  // some code
-} catch (error) {
-  handleError(error, 'in component logic');
-}
-```
-
----
-
-### `wrapWithErrorHandling(fn, componentName?)`
-
-Оборачивает функцию для автоматического отлова ошибок.
-
-```typescript
-const safeFn = wrapWithErrorHandling(
-  () => riskyOperation(),
-  'MyComponent'
-);
-```
-
-## 🚀 Примеры использования
-
-### 1. Базовый пример
-
-```typescript
-import { ErrorBoundary, type FC } from 'drift-spa';
-
-const BuggyComponent: FC = () => {
-  throw new Error('I crashed!');
-};
-
-const App: FC = () => (
-  <ErrorBoundary>
-    <BuggyComponent />
-  </ErrorBoundary>
-);
-```
-
-По умолчанию ErrorBoundary покажет красивый UI с информацией об ошибке и кнопкой "Try Again".
-
----
-
-### 2. Кастомный Fallback UI
-
-```typescript
-const App: FC = () => (
-  <ErrorBoundary
-    fallback={(error, errorInfo, reset) => {
-      const container = document.createElement('div');
-      container.style.cssText = 'padding: 20px; background: #fee; border: 2px solid #f00;';
-      
-      const title = document.createElement('h2');
-      title.textContent = '⚠️ Oops! Something went wrong';
-      
-      const message = document.createElement('p');
-      message.textContent = error.message;
-      
-      const button = document.createElement('button');
-      button.textContent = 'Try Again';
-      button.onclick = reset;
-      
-      container.appendChild(title);
-      container.appendChild(message);
-      container.appendChild(button);
-      
-      return container;
-    }}
-  >
-    <BuggyComponent />
-  </ErrorBoundary>
-);
-```
-
----
-
-### 3. С обработчиками событий
-
-```typescript
-const App: FC = () => (
-  <ErrorBoundary
-    onError={(error, errorInfo) => {
-      // Отправить ошибку в систему логирования
-      console.error('Error caught:', error);
-      console.error('Error info:', errorInfo);
-      
-      // Отправить в Sentry, LogRocket и т.д.
-      // Sentry.captureException(error);
-    }}
-    onReset={() => {
-      console.log('Error boundary was reset');
-      // Очистить состояние, если нужно
-    }}
-  >
-    <App />
-  </ErrorBoundary>
-);
-```
-
----
-
-### 4. Автоматический сброс с resetKeys
-
-```typescript
-const App: FC = () => {
-  let userId = state(1);
-  
+const App = () => {
   return (
-    <div>
-      <button onClick={() => setState(() => { userId.value++; })}>
-        Next User
-      </button>
-      
-      <ErrorBoundary 
-        resetKeys={[() => userId.value]}
-      >
-        <UserProfile userId={() => userId.value} />
-      </ErrorBoundary>
-    </div>
+    <ErrorBoundary>
+      <YourComponent />
+    </ErrorBoundary>
   );
 };
 ```
 
-ErrorBoundary автоматически сбросится при изменении `userId`.
+## Default Fallback UI
 
----
+By default, ErrorBoundary displays a styled error message with:
+- Error title
+- Error message
+- Collapsible stack trace
+- "Try again" button to reset the error
 
-### 5. Вложенные Error Boundaries
+## Custom Fallback UI
+
+Provide your own fallback UI:
 
 ```typescript
-const App: FC = () => (
-  <ErrorBoundary>
-    <Header />
-    
-    <ErrorBoundary>
-      <Sidebar />
-    </ErrorBoundary>
-    
-    <ErrorBoundary>
-      <MainContent />
-    </ErrorBoundary>
-    
-    <Footer />
-  </ErrorBoundary>
-);
+<ErrorBoundary
+  fallback={(error, errorInfo, reset) => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <h1>Oops! Something went wrong</h1>
+      <p>${error.message}</p>
+      <button onclick="${reset}">Retry</button>
+    `;
+    return container;
+  }}
+>
+  <BuggyComponent />
+</ErrorBoundary>
 ```
 
-Ошибка в `Sidebar` не затронет `MainContent` и наоборот.
+## Error Callbacks
 
----
-
-### 6. Отлов асинхронных ошибок
+Handle errors programmatically:
 
 ```typescript
-import { captureError, type FC } from 'drift-spa';
+<ErrorBoundary
+  onError={(error, errorInfo) => {
+    console.error('Error caught:', error);
+    console.error('Component stack:', errorInfo.componentStack);
+    // Send to error tracking service
+    sendToErrorTracking(error, errorInfo);
+  }}
+  onReset={() => {
+    console.log('Error boundary was reset');
+    // Perform cleanup or state reset
+  }}
+>
+  <YourComponent />
+</ErrorBoundary>
+```
 
-const AsyncComponent: FC = () => {
+## Automatic Reset with Keys
+
+Automatically reset the error boundary when certain values change:
+
+```typescript
+const App = () => {
+  let userId = state(1);
+  
+  return (
+    <ErrorBoundary
+      resetKeys={[() => userId.value]}
+      onReset={() => console.log('User changed, resetting errors')}
+    >
+      <UserProfile userId={() => userId.value} />
+    </ErrorBoundary>
+  );
+};
+```
+
+When `userId.value` changes, the error boundary automatically resets and re-renders children.
+
+## Nested Error Boundaries
+
+Error boundaries can be nested to provide granular error handling:
+
+```typescript
+<ErrorBoundary fallback={(error) => <AppError error={error} />}>
+  <Header />
+  
+  <ErrorBoundary fallback={(error) => <SidebarError error={error} />}>
+    <Sidebar />
+  </ErrorBoundary>
+  
+  <ErrorBoundary fallback={(error) => <ContentError error={error} />}>
+    <MainContent />
+  </ErrorBoundary>
+</ErrorBoundary>
+```
+
+Errors in `Sidebar` won't affect `Header` or `MainContent`.
+
+## Capturing Async Errors
+
+For errors in async operations (promises, async functions), use `captureError`:
+
+```typescript
+import { captureError } from 'drift-spa';
+
+const AsyncComponent = () => {
   const fetchData = async () => {
     try {
       const response = await fetch('/api/data');
       if (!response.ok) throw new Error('Failed to fetch');
       return response.json();
     } catch (error) {
-      captureError(error as Error, 'in AsyncComponent.fetchData');
+      captureError(error, 'in AsyncComponent.fetchData');
     }
   };
   
@@ -234,360 +133,84 @@ const AsyncComponent: FC = () => {
   );
 };
 
-const App: FC = () => (
-  <ErrorBoundary>
-    <AsyncComponent />
-  </ErrorBoundary>
-);
+// Wrap with ErrorBoundary
+<ErrorBoundary>
+  <AsyncComponent />
+</ErrorBoundary>
 ```
 
----
+## Error Handler Hook
 
-### 7. С useErrorHandler
+Use `useErrorHandler` to get an error handler function:
 
 ```typescript
-import { useErrorHandler, state, setState, type FC } from 'drift-spa';
+import { useErrorHandler } from 'drift-spa';
 
-const DataFetcher: FC = () => {
+const Component = () => {
   const handleError = useErrorHandler();
-  let data = state(null);
   
-  const loadData = async () => {
+  const riskyOperation = () => {
     try {
-      const response = await fetch('/api/data');
-      if (!response.ok) throw new Error('HTTP error');
-      const json = await response.json();
-      setState(() => { data.value = json; });
+      // ... risky code
     } catch (error) {
-      handleError(error as Error, 'failed to load data');
+      handleError(error, 'in riskyOperation');
     }
   };
   
-  return (
-    <div>
-      <button onClick={loadData}>Load</button>
-      <div>{() => JSON.stringify(data.value)}</div>
-    </div>
-  );
+  return <button onClick={riskyOperation}>Do Something</button>;
 };
 ```
 
----
+## Global Error Handling
 
-### 8. Обертка всего приложения
+Error boundaries automatically catch:
+- ✅ Component render errors
+- ✅ `window.error` events (when boundary is active)
+- ✅ `unhandledrejection` events (when boundary is active)
 
-```typescript
-const App: FC = () => (
-  <ErrorBoundary
-    fallback={(error, errorInfo, reset) => (
-      // Красивая страница ошибки
-      <ErrorPage error={error} onReset={reset} />
-    )}
-    onError={(error, errorInfo) => {
-      // Отправить в систему мониторинга
-      sendToMonitoring(error, errorInfo);
-    }}
-  >
-    <Router>
-      <App />
-    </Router>
-  </ErrorBoundary>
-);
-```
+## ErrorInfo Object
 
----
-
-## 🎨 Паттерны использования
-
-### Защита критичных частей
+The `ErrorInfo` object passed to `onError` and `fallback` contains:
 
 ```typescript
-const Dashboard: FC = () => (
-  <div>
-    <Header />
-    
-    {/* Критичная часть — защищаем */}
-    <ErrorBoundary>
-      <CriticalWidget />
-    </ErrorBoundary>
-    
-    {/* Менее важная часть — тоже защищаем отдельно */}
-    <ErrorBoundary>
-      <OptionalWidget />
-    </ErrorBoundary>
-    
-    <Footer />
-  </div>
-);
-```
-
----
-
-### Route-level Error Boundaries
-
-```typescript
-const { RouterView, push } = createRouter({
-  mode: 'history',
-  routes: {
-    '/': () => (
-      <ErrorBoundary>
-        <HomePage />
-      </ErrorBoundary>
-    ),
-    '/profile': () => (
-      <ErrorBoundary resetKeys={[location.pathname]}>
-        <ProfilePage />
-      </ErrorBoundary>
-    ),
-    '/dashboard': () => (
-      <ErrorBoundary>
-        <DashboardPage />
-      </ErrorBoundary>
-    )
-  }
-});
-```
-
----
-
-### Интеграция с DI
-
-```typescript
-export class ErrorReportingService {
-  report(error: Error, errorInfo: ErrorInfo) {
-    // Отправить в Sentry, Rollbar, etc.
-    console.error('Reporting error:', error);
-  }
+interface ErrorInfo {
+  componentStack?: string;  // Where the error occurred
+  errorBoundary?: string;   // Name of the boundary that caught it
 }
-
-provide(ErrorReportingService);
-
-const App: FC = () => {
-  const errorReporter = inject(ErrorReportingService);
-  
-  return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-        errorReporter.report(error, errorInfo);
-      }}
-    >
-      <AppContent />
-    </ErrorBoundary>
-  );
-};
 ```
 
----
+## Best Practices
 
-## ⚠️ Важные замечания
+### 1. Strategic Placement
 
-### Что Error Boundaries НЕ отлавливают
-
-Error Boundaries **НЕ** отлавливают ошибки в:
-
-1. **Event handlers** (используйте try-catch или `captureError`)
-```typescript
-// ❌ Не сработает
-<button onClick={() => { throw new Error('Boom'); }}>
-  Click
-</button>
-
-// ✅ Правильно
-<button onClick={() => {
-  try {
-    riskyOperation();
-  } catch (error) {
-    captureError(error);
-  }
-}}>
-  Click
-</button>
-```
-
-2. **Асинхронном коде** (нужно явно вызывать `captureError`)
-```typescript
-// ❌ Не сработает
-const loadData = async () => {
-  throw new Error('Async error');
-};
-
-// ✅ Правильно
-const loadData = async () => {
-  try {
-    // async operation
-  } catch (error) {
-    captureError(error, 'in loadData');
-  }
-};
-```
-
-3. **Ошибках в самом ErrorBoundary** (защищайте вложенными boundaries)
-
----
-
-### Рекомендации
-
-1. **Используйте несколько ErrorBoundary** — не оборачивайте всё приложение одним
-2. **Логируйте ошибки** — используйте `onError` для отправки в систему мониторинга
-3. **Предоставляйте способ восстановления** — кнопка "Try Again" или автоматический reset через `resetKeys`
-4. **Показывайте понятные сообщения** — пользователь должен понимать, что произошло
-5. **Тестируйте error states** — убедитесь, что ваш fallback UI работает корректно
-
----
-
-## 🔧 Интеграция с системами мониторинга
-
-### Sentry
+Place error boundaries at strategic points in your app:
 
 ```typescript
-import * as Sentry from '@sentry/browser';
-
-const App: FC = () => (
-  <ErrorBoundary
-    onError={(error, errorInfo) => {
-      Sentry.captureException(error, {
-        contexts: {
-          errorBoundary: {
-            componentStack: errorInfo.componentStack,
-            timestamp: errorInfo.timestamp
-          }
-        }
-      });
-    }}
-  >
-    <App />
-  </ErrorBoundary>
-);
-```
-
-### Custom Logger Service
-
-```typescript
-export class LoggerService {
-  error(message: string, error?: Error, context?: any) {
-    console.error(message, error, context);
-    // Отправить в backend
-  }
-}
-
-provide(LoggerService);
-
-const App: FC = () => {
-  const logger = inject(LoggerService);
-  
-  return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-        logger.error('Component error', error, errorInfo);
-      }}
-    >
-      <App />
-    </ErrorBoundary>
-  );
-};
-```
-
----
-
-## 📊 Тестирование
-
-```typescript
-import { render, fireEvent } from 'drift-test-utils';
-import { ErrorBoundary } from 'drift-spa';
-
-test('ErrorBoundary shows fallback on error', () => {
-  const BuggyComponent = () => {
-    throw new Error('Test error');
-  };
-  
-  const { getByText } = render(
+// App-level boundary
+<ErrorBoundary fallback={<AppCrashScreen />}>
+  <Router>
+    {/* Route-level boundaries */}
     <ErrorBoundary>
-      <BuggyComponent />
+      <Route path="/dashboard" component={Dashboard} />
     </ErrorBoundary>
-  );
-  
-  expect(getByText(/something went wrong/i)).toBeInTheDocument();
-});
-
-test('ErrorBoundary can reset', () => {
-  let shouldThrow = true;
-  const BuggyComponent = () => {
-    if (shouldThrow) throw new Error('Test error');
-    return <div>Success</div>;
-  };
-  
-  const { getByText } = render(
+    
     <ErrorBoundary>
-      <BuggyComponent />
+      <Route path="/settings" component={Settings} />
     </ErrorBoundary>
-  );
-  
-  expect(getByText(/something went wrong/i)).toBeInTheDocument();
-  
-  shouldThrow = false;
-  fireEvent.click(getByText(/try again/i));
-  
-  expect(getByText('Success')).toBeInTheDocument();
-});
-```
-
----
-
-## 🎯 Best Practices
-
-### 1. Гранулярность
-
-```typescript
-// ✅ Хорошо - несколько boundaries для изоляции
-<div>
-  <ErrorBoundary><Header /></ErrorBoundary>
-  <ErrorBoundary><Sidebar /></ErrorBoundary>
-  <ErrorBoundary><Content /></ErrorBoundary>
-</div>
-
-// ❌ Плохо - один boundary для всего
-<ErrorBoundary>
-  <Header />
-  <Sidebar />
-  <Content />
+  </Router>
 </ErrorBoundary>
 ```
 
-### 2. Fallback UI
+### 2. Logging and Monitoring
+
+Always log errors to a monitoring service:
 
 ```typescript
-// ✅ Хорошо - информативный fallback
-<ErrorBoundary
-  fallback={(error, _, reset) => (
-    <div>
-      <h2>Unable to load dashboard</h2>
-      <p>{error.message}</p>
-      <button onClick={reset}>Retry</button>
-      <a href="/">Go Home</a>
-    </div>
-  )}
->
-  <Dashboard />
-</ErrorBoundary>
-
-// ❌ Плохо - неинформативный fallback
-<ErrorBoundary fallback={<div>Error</div>}>
-  <Dashboard />
-</ErrorBoundary>
-```
-
-### 3. Логирование
-
-```typescript
-// ✅ Хорошо - логируем с контекстом
 <ErrorBoundary
   onError={(error, errorInfo) => {
-    logger.error('Component crashed', {
-      error,
-      componentStack: errorInfo.componentStack,
-      timestamp: errorInfo.timestamp,
-      userId: currentUser.id,
-      route: location.pathname
+    // Sentry, LogRocket, etc.
+    errorMonitoringService.captureException(error, {
+      extra: errorInfo
     });
   }}
 >
@@ -595,55 +218,206 @@ test('ErrorBoundary can reset', () => {
 </ErrorBoundary>
 ```
 
----
+### 3. User-Friendly Messages
 
-## 🚀 Преимущества Drift Error Boundaries
-
-1. **Type-safe** — полная типизация props и callbacks
-2. **Автоматический reset** — через `resetKeys`
-3. **Интеграция с реактивностью** — работает с `state`, `computed`, `effect`
-4. **Программный API** — `captureError`, `useErrorHandler`
-5. **Вложенность** — можно создавать иерархию boundaries
-6. **Lifecycle hooks** — `onError`, `onReset`
-7. **Кастомизируемый fallback** — полный контроль над UI
-
----
-
-## 📖 Дополнительные ресурсы
-
-- [Dependency Injection](./DEPENDENCY_INJECTION.md)
-- [Context API](./CONTEXT_API.md)
-- [Reactivity System](../README.md#reactivity)
-
----
-
-## 🐛 Troubleshooting
-
-### ErrorBoundary не ловит ошибку
-
-**Проблема:** Ошибка проходит мимо ErrorBoundary
-
-**Решение:** 
-- Убедитесь, что ErrorBoundary находится выше компонента с ошибкой в дереве
-- Для асинхронных ошибок используйте `captureError`
-- Для event handlers оборачивайте в try-catch
-
-### Fallback UI не обновляется
-
-**Проблема:** После reset показывается старая ошибка
-
-**Решение:** Используйте `resetKeys` для автоматического сброса при изменении данных
+Provide clear, actionable error messages:
 
 ```typescript
-<ErrorBoundary resetKeys={[() => userId.value]}>
-  <UserProfile userId={() => userId.value} />
+<ErrorBoundary
+  fallback={(error, errorInfo, reset) => {
+    return createErrorUI({
+      title: "We're sorry, something went wrong",
+      message: "Please try again or contact support if the problem persists.",
+      action: reset,
+      actionText: "Reload Page"
+    });
+  }}
+>
+  <App />
 </ErrorBoundary>
 ```
 
-### Бесконечный цикл ошибок
+### 4. Development vs Production
 
-**Проблема:** ErrorBoundary сам выбрасывает ошибку
+Show detailed errors in development, generic ones in production:
 
-**Решение:** Проверьте fallback UI на наличие ошибок. Оберните во внешний ErrorBoundary.
+```typescript
+const isDev = process.env.NODE_ENV === 'development';
 
+<ErrorBoundary
+  fallback={(error, errorInfo, reset) => {
+    if (isDev) {
+      return <DetailedErrorPage error={error} errorInfo={errorInfo} reset={reset} />;
+    }
+    return <GenericErrorPage reset={reset} />;
+  }}
+>
+  <App />
+</ErrorBoundary>
+```
 
+## Limitations
+
+Error boundaries **do not** catch errors:
+- In event handlers (use try-catch)
+- In setTimeout/setInterval callbacks (use try-catch or captureError)
+- In the error boundary component itself
+- During server-side rendering
+
+For these cases, use `captureError` or `useErrorHandler`.
+
+## Example: Complete Setup
+
+```typescript
+import { 
+  ErrorBoundary, 
+  captureError, 
+  state, 
+  setState 
+} from 'drift-spa';
+
+// Error tracking service
+const logError = (error: Error, errorInfo: any) => {
+  console.error('Error:', error);
+  console.error('Info:', errorInfo);
+  // Send to Sentry, etc.
+};
+
+// App component
+const App = () => {
+  let resetKey = state(0);
+  
+  return (
+    <ErrorBoundary
+      resetKeys={[() => resetKey.value]}
+      onError={logError}
+      onReset={() => {
+        console.log('App error boundary reset');
+        // Clear error state
+      }}
+      fallback={(error, errorInfo, reset) => {
+        return (
+          <div style={{ padding: '2rem', textAlign: 'center' }}>
+            <h1>⚠️ Application Error</h1>
+            <p>We're sorry, something unexpected happened.</p>
+            <button onClick={reset}>Reload Application</button>
+            <button onClick={() => setState(() => { resetKey.value++; })}>
+              Force Reset
+            </button>
+          </div>
+        );
+      }}
+    >
+      <Router>
+        <Routes />
+      </Router>
+    </ErrorBoundary>
+  );
+};
+
+// Buggy component example
+const BuggyComponent = () => {
+  let count = state(0);
+  
+  // This will throw when count > 3
+  if (count.value > 3) {
+    throw new Error('Count is too high!');
+  }
+  
+  return (
+    <div>
+      <p>Count: {() => count.value}</p>
+      <button onClick={() => setState(() => { count.value++; })}>
+        Increment
+      </button>
+    </div>
+  );
+};
+
+// Async error example
+const AsyncComponent = () => {
+  const fetchData = async () => {
+    try {
+      const response = await fetch('/api/data');
+      if (!response.ok) throw new Error('API Error');
+      return response.json();
+    } catch (error) {
+      captureError(error, 'in AsyncComponent.fetchData');
+    }
+  };
+  
+  return <button onClick={fetchData}>Fetch Data</button>;
+};
+```
+
+## API Reference
+
+### `ErrorBoundary` Props
+
+```typescript
+interface ErrorBoundaryProps {
+  children?: any;
+  fallback?: (error: Error, errorInfo: ErrorInfo, reset: () => void) => Node;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  onReset?: () => void;
+  resetKeys?: Array<() => any>;
+}
+```
+
+### `captureError(error, context?)`
+
+Manually capture an error and propagate it to the nearest error boundary.
+
+```typescript
+captureError(
+  new Error('Something went wrong'),
+  'in my async operation'
+);
+```
+
+### `useErrorHandler()`
+
+Returns an error handler function.
+
+```typescript
+const handleError = useErrorHandler();
+handleError(error, 'optional context');
+```
+
+## Migration from React
+
+Drift's Error Boundaries work similarly to React's, with a few differences:
+
+### React:
+```jsx
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  
+  componentDidCatch(error, errorInfo) {
+    logError(error, errorInfo);
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return <ErrorFallback />;
+    }
+    return this.props.children;
+  }
+}
+```
+
+### Drift:
+```typescript
+<ErrorBoundary
+  fallback={(error, errorInfo, reset) => <ErrorFallback reset={reset} />}
+  onError={logError}
+>
+  {children}
+</ErrorBoundary>
+```
+
+Drift's approach is simpler and more functional!
