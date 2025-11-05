@@ -95,14 +95,39 @@ createPortal(<Modal />, document.body);
 - [x] Документация и примеры (lazy, data fetching, nested)
 **Время:** 2-3 часа (намного быстрее оценки!)
 
-### 1.5 Улучшенный роутинг
-- [ ] Lazy loading routes
-- [ ] Scroll restoration
-- [ ] Route metadata (title, description)
-- [ ] Protected routes (guards)
-- [ ] Route transitions
-- [ ] Breadcrumbs API
-**Оценка:** 5-7 дней
+### 1.5 Улучшенный роутинг ✅ ЗАВЕРШЕНО
+**Зачем:** Профессиональный роутинг с оптимизацией загрузки, SEO и UX
+```typescript
+const router = createRouter({
+  scrollBehavior: 'auto',
+  transition: { enterClass: 'fade-in', duration: 300 },
+  routes: {
+    '/page': {
+      component: () => import('./Page'),  // Lazy loading
+      meta: {
+        title: 'Page Title',
+        description: 'SEO description',
+        breadcrumb: 'Page Name'
+      }
+    }
+  }
+});
+
+const breadcrumbs = router.breadcrumbs();
+```
+**Статус:** ✅ Реализовано в v0.2.0
+- [x] Lazy loading routes (динамическая загрузка компонентов)
+- [x] Scroll restoration (автоматическое сохранение/восстановление позиции)
+- [x] Route metadata (title, description, meta tags для SEO)
+- [x] Protected routes (guards) - уже было
+- [x] Route transitions (анимации переходов между страницами)
+- [x] Breadcrumbs API (автогенерация навигационных цепочек)
+- [x] Поддержка RouteConfig с расширенными настройками
+- [x] Кэширование lazy компонентов
+- [x] Интеграция с Suspense для loading states
+- [x] Примеры: metadata, scroll, breadcrumbs, lazy routes
+- [x] Документация и примеры
+**Время:** 2-3 часа (намного быстрее оценки!)
 
 ### 1.6 Refs API
 **Зачем:** Доступ к DOM-элементам, integration с 3rd-party libs

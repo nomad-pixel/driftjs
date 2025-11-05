@@ -25,9 +25,16 @@ import type { Component } from './jsx-runtime';
 export { 
   createRouter, 
   createHashRouter,
-  type Router,
-  type RouterConfig,
-  type RouteContext
+  type Router, 
+  type RouterConfig, 
+  type RouteContext,
+  type RouteMetadata,
+  type RouteConfig,
+  type RouteComponent,
+  type LazyComponent,
+  type TransitionConfig,
+  type ScrollBehavior,
+  type Breadcrumb
 } from './router';
 
 export {

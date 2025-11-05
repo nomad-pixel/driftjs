@@ -30,16 +30,44 @@ import { PortalFunction } from './pages/PortalFunction';
 import { SuspenseLazyPage } from './pages/SuspenseLazy';
 import { SuspenseDataPage } from './pages/SuspenseData';
 import { SuspenseNestedPage } from './pages/SuspenseNested';
+import { RouterMetaExample } from './pages/RouterMetaExample';
+import { ScrollRestoration } from './pages/ScrollRestoration';
+import { BreadcrumbsExample } from './pages/BreadcrumbsExample';
+import { LazyRouteExample } from './pages/LazyRouteExample';
 
 provide(LoggerService);
 provide(ThemeService);
 provide(ApiService);
 provide(CounterService, { deps: [LoggerService] });
 
-const { RouterView, push } = createRouter({
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .page-enter {
+    animation: fadeIn 0.3s ease;
+  }
+`;
+document.head.appendChild(style);
+
+const router = createRouter({
   mode: 'history',
+  scrollBehavior: 'auto',
+  transition: {
+    duration: 300,
+    enterClass: 'page-enter'
+  },
   routes: {
-    '/': Home,
+    '/': {
+      component: Home,
+      meta: {
+        title: 'Home | Drift SPA',
+        description: 'Welcome to Drift SPA framework example',
+        breadcrumb: 'Home'
+      }
+    },
     '/async': Async,
     '/advanced-effect': AdvancedEffect,
     '/context': Context,
@@ -57,10 +85,43 @@ const { RouterView, push } = createRouter({
     '/suspense-lazy': SuspenseLazyPage,
     '/suspense-data': SuspenseDataPage,
     '/suspense-nested': SuspenseNestedPage,
+    '/router-meta': {
+      component: RouterMetaExample,
+      meta: {
+        title: 'Route Metadata | Drift SPA',
+        description: 'Example of automatic SEO metadata management in Drift SPA',
+        meta: {
+          keywords: 'drift, spa, routing, seo, metadata',
+          author: 'Drift Team'
+        },
+        breadcrumb: 'Router Meta'
+      }
+    },
+    '/scroll-restoration': {
+      component: ScrollRestoration,
+      meta: {
+        title: 'Scroll Restoration | Drift SPA',
+        description: 'Automatic scroll position restoration example',
+        breadcrumb: 'Scroll Restoration'
+      }
+    },
+    '/breadcrumbs': {
+      component: (props: any) => BreadcrumbsExample({ ...props, router }),
+      meta: {
+        title: 'Breadcrumbs | Drift SPA',
+        description: 'Automatic breadcrumbs generation example',
+        breadcrumb: 'Breadcrumbs'
+      }
+    },
+    '/lazy-route': () => import('./pages/LazyRouteExample').then(m => ({ 
+      default: m.LazyRouteExample 
+    })),
     '/test': Test,
     '*': () => <div>404</div>
   }
 });
+
+const { RouterView, push } = router;
 
 const App: FC = () => (
   <div>
@@ -83,6 +144,10 @@ const App: FC = () => (
       <a href="/suspense-lazy" onClick={(e) => { e.preventDefault(); push('/suspense-lazy'); }}>Lazy</a>
       <a href="/suspense-data" onClick={(e) => { e.preventDefault(); push('/suspense-data'); }}>Data</a>
       <a href="/suspense-nested" onClick={(e) => { e.preventDefault(); push('/suspense-nested'); }}>Nested</a>
+      <a href="/router-meta" onClick={(e) => { e.preventDefault(); push('/router-meta'); }}>Meta</a>
+      <a href="/scroll-restoration" onClick={(e) => { e.preventDefault(); push('/scroll-restoration'); }}>Scroll</a>
+      <a href="/breadcrumbs" onClick={(e) => { e.preventDefault(); push('/breadcrumbs'); }}>Breadcrumbs</a>
+      <a href="/lazy-route" onClick={(e) => { e.preventDefault(); push('/lazy-route'); }}>Lazy Route</a>
       <a href="/test" onClick={(e) => { e.preventDefault(); push('/test'); }}>Test</a>
     </nav>
     <ErrorBoundary>
